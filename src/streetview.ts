@@ -17,6 +17,18 @@ interface PanoramaxItem {
   };
 }
 
+/** How long to wait for the first (standard-size) photo before giving up. */
+const PHOTO_TIMEOUT = 20_000;
+/** The full-size upgrade can take longer; it only replaces the photo if it arrives. */
+const HD_TIMEOUT = 120_000;
+
+/** Downloads an image within `ms`, returning an object URL (the caller revokes it). */
+async function fetchImage(url: string, ms: number): Promise<string> {
+  const res = await fetch(url, { signal: AbortSignal.timeout(ms) });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return URL.createObjectURL(await res.blob());
+}
+
 /**
  * Street-level photos. Uses Mapillary when the user has entered a token, otherwise
  * Panoramax (no key needed). Google Street View is always one click away in the browser.
@@ -34,6 +46,9 @@ export class StreetView {
   private item?: PanoramaxItem;
   private marker?: Entity;
   private position: [number, number] = [0, 0];
+  /** Bumped per photo, so slow downloads for a photo no longer shown are ignored. */
+  private loadId = 0;
+  private objectUrls: string[] = [];
 
   constructor(private readonly viewer: Viewer) {
     document.querySelector('#street-close')!.addEventListener('click', () => this.close());
@@ -69,6 +84,8 @@ export class StreetView {
   }
 
   private reset(): void {
+    this.loadId++;
+    this.releaseUrls();
     this.sphere?.destroy();
     this.sphere = undefined;
     this.mapillary?.remove();
@@ -152,26 +169,81 @@ export class StreetView {
     this.next.hidden = !item.links.some((l) => l.rel === 'next');
     this.placeMarker(lon, lat);
 
-    const url = (item.assets.hd ?? item.assets.sd).href;
+    // Standard size first (fast), then swap in full size for 360° photos if it arrives.
+    const id = ++this.loadId;
+    const first = (item.assets.sd ?? item.assets.hd).href;
+    const full = is360 && item.assets.hd && item.assets.hd.href !== first ? item.assets.hd.href : null;
+    this.releaseUrls();
+    this.showMessage('Loading photo…');
+
+    let src: string;
+    try {
+      src = await fetchImage(first, PHOTO_TIMEOUT);
+    } catch {
+      if (id !== this.loadId) return;
+      this.showMessage("The photo server isn't responding. Try again later, or open this spot in Google.", () =>
+        void this.showPanoramax(item),
+      );
+      return;
+    }
+    if (id !== this.loadId) return URL.revokeObjectURL(src);
+    this.objectUrls.push(src);
+
     if (is360) {
-      if (this.sphere) {
-        await this.sphere.setPanorama(url);
-      } else {
-        const [{ Viewer: SphereViewer }] = await Promise.all([
-          import('@photo-sphere-viewer/core'),
-          import('@photo-sphere-viewer/core/index.css'),
-        ]);
-        this.container.innerHTML = '';
-        this.sphere = new SphereViewer({ container: this.container, panorama: url, navbar: ['zoom', 'fullscreen'] });
+      await this.showSphere(src);
+      if (full) {
+        fetchImage(full, HD_TIMEOUT)
+          .then(async (hd) => {
+            if (id !== this.loadId || !this.sphere) return URL.revokeObjectURL(hd);
+            this.objectUrls.push(hd);
+            await this.sphere.setPanorama(hd, { transition: false, showLoader: false });
+          })
+          .catch(() => {
+            // Keep showing the standard-size photo.
+          });
       }
     } else {
       this.sphere?.destroy();
       this.sphere = undefined;
       const img = document.createElement('img');
-      img.src = item.assets.sd?.href ?? url;
+      img.src = src;
       img.alt = 'Street-level photo';
       this.container.replaceChildren(img);
     }
+  }
+
+  private async showSphere(src: string): Promise<void> {
+    if (this.sphere) {
+      await this.sphere.setPanorama(src, { transition: false });
+      return;
+    }
+    const [{ Viewer: SphereViewer }] = await Promise.all([
+      import('@photo-sphere-viewer/core'),
+      import('@photo-sphere-viewer/core/index.css'),
+    ]);
+    this.container.innerHTML = '';
+    this.sphere = new SphereViewer({ container: this.container, panorama: src, navbar: ['zoom', 'fullscreen'] });
+  }
+
+  /** Replaces the viewer with a short message, plus a Retry button when `retry` is given. */
+  private showMessage(text: string, retry?: () => void): void {
+    this.sphere?.destroy();
+    this.sphere = undefined;
+    const box = document.createElement('div');
+    box.className = 'street-message';
+    box.textContent = text;
+    if (retry) {
+      const again = document.createElement('button');
+      again.textContent = 'Retry';
+      again.addEventListener('click', retry);
+      box.append(again);
+    }
+    this.container.replaceChildren(box);
+  }
+
+  private releaseUrls(): void {
+    this.objectUrls.forEach((u) => URL.revokeObjectURL(u));
+    this.objectUrls = [];
   }
 
   private placeMarker(lon: number, lat: number): void {
