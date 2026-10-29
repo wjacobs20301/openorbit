@@ -1,0 +1,163 @@
+:root {
+  --bg: #f4f5f7;
+  --panel: #ffffff;
+  --text: #1b1f24;
+  --muted: #5f6b7a;
+  --border: #d9dee5;
+  --accent: #1a73e8;
+  --accent-text: #ffffff;
+  --hover: #eef2f8;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15181c;
+    --panel: #1d2126;
+    --text: #e6e9ed;
+    --muted: #97a1ad;
+    --border: #2f353d;
+    --accent: #5a9bff;
+    --accent-text: #0b1220;
+    --hover: #262b32;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  font: 13px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+#app {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  height: 100%;
+}
+
+#sidebar {
+  overflow-y: auto;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.brand { font-weight: 650; font-size: 15px; }
+
+.panel h2 {
+  margin: 0 0 6px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+input, select, button, .button {
+  font: inherit;
+  color: inherit;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 8px;
+}
+
+button, .button { cursor: pointer; white-space: nowrap; }
+button:hover, .button:hover { background: var(--hover); }
+button.active { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+
+.search { position: relative; }
+.search input { width: 100%; }
+
+.results {
+  position: absolute;
+  z-index: 10;
+  left: 0;
+  right: 0;
+  margin: 4px 0 0;
+  padding: 4px 0;
+  list-style: none;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.18);
+}
+.results li { padding: 6px 10px; cursor: pointer; }
+.results li:hover { background: var(--hover); }
+
+.tools, .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+
+.list { list-style: none; margin: 0 0 6px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.list li { display: flex; gap: 6px; align-items: center; }
+.list li input:not([type='checkbox']) { flex: 1; min-width: 0; }
+.list li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.list button { padding: 2px 8px; }
+
+.wide { width: 100%; }
+.time-label { margin: 2px 0 8px; font-weight: 600; }
+.check { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+input[type='range'] { padding: 0; accent-color: var(--accent); }
+.button { display: inline-block; }
+
+.field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; color: var(--muted); }
+
+.hint { color: var(--muted); margin: 6px 0 0; }
+footer.hint { margin-top: auto; }
+
+#globe { position: relative; min-width: 0; }
+#globe .cesium-viewer { position: absolute; inset: 0; }
+
+#status {
+  position: absolute;
+  left: 8px;
+  bottom: 30px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgb(0 0 0 / 0.55);
+  color: #fff;
+  font: 12px ui-monospace, Menlo, Consolas, monospace;
+  white-space: pre;
+  pointer-events: none;
+}
+
+#street-panel {
+  position: fixed;
+  right: 12px;
+  bottom: 40px;
+  width: min(560px, 45vw);
+  height: min(420px, 55vh);
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.35);
+  z-index: 20;
+}
+#street-panel[hidden] { display: none; }
+#street-panel > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+#street-panel > footer { padding: 4px 8px 6px; margin: 0; }
+#street-panel a { color: var(--accent); }
+#street-viewer { position: relative; flex: 1; background: #000; }
+#street-viewer img { width: 100%; height: 100%; object-fit: contain; }
+
+@media (max-width: 760px) {
+  #app { grid-template-columns: 1fr; grid-template-rows: 45% 55%; }
+  #sidebar { border-right: 0; border-bottom: 1px solid var(--border); }
+  #street-panel { left: 8px; right: 8px; width: auto; }
+}

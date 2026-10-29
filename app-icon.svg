@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <radialGradient id="sea" cx="38%" cy="32%" r="75%">
+      <stop offset="0" stop-color="#5fb4ff"/>
+      <stop offset="1" stop-color="#0b3d91"/>
+    </radialGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="220" fill="#0d1726"/>
+  <circle cx="512" cy="512" r="380" fill="url(#sea)"/>
+  <path d="M330 330c70-40 150-20 190 30s20 110-40 130-120 70-90 140-70 60-120-10-40-250 60-290zM600 260c80 10 170 80 200 170s-20 140-80 110-60-90-120-110-90-80-60-130 30-45 60-40zM620 600c60-20 140 10 140 70s-60 130-120 140-90-40-80-100 20-95 60-110z" fill="#4caf6a" opacity=".92"/>
+  <ellipse cx="512" cy="512" rx="380" ry="130" fill="none" stroke="#ffcc33" stroke-width="22" transform="rotate(-25 512 512)"/>
+</svg>

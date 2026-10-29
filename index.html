@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Google Earth Ultra</title>
+  </head>
+  <body>
+    <div id="app">
+      <aside id="sidebar">
+        <header class="brand">Google Earth Ultra</header>
+
+        <form id="search-form" class="search">
+          <input id="search-input" type="search" placeholder="Search places" autocomplete="off" />
+          <ul id="search-results" class="results" hidden></ul>
+        </form>
+
+        <section class="panel">
+          <h2>Tools</h2>
+          <div class="tools">
+            <button id="tool-placemark" data-tool="placemark" title="Click the globe to add a placemark">Placemark</button>
+            <button id="tool-measure" data-tool="measure" title="Click points to measure distance">Measure</button>
+            <button id="tool-street" data-tool="street" title="Click a street to see photos taken there">Street view</button>
+          </div>
+          <p id="tool-hint" class="hint"></p>
+        </section>
+
+        <section class="panel">
+          <h2>Places</h2>
+          <ul id="placemark-list" class="list"></ul>
+          <div class="row">
+            <button id="kml-export">Export KML</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Imported data</h2>
+          <label class="button" title="KML, KMZ, GeoJSON, GPX, CSV, zipped shapefile, or .shp with its .dbf">Import file…<input id="import-input" type="file" multiple hidden /></label>
+          <p id="import-status" class="hint">KML, KMZ, GeoJSON, GPX, CSV or shapefile. No size limit.</p>
+          <ul id="import-list" class="list"></ul>
+        </section>
+
+        <section class="panel">
+          <h2>Time</h2>
+          <input id="time-slider" type="range" step="1" class="wide" aria-label="Imagery date" />
+          <p id="time-label" class="time-label">Now</p>
+          <label class="check"><input id="time-daily" type="checkbox" /> Daily satellite image (250 m)</label>
+          <input id="time-date" type="date" class="wide" aria-label="Daily image date" />
+        </section>
+
+        <section class="panel">
+          <h2>Layers</h2>
+          <ul id="layer-list" class="list"></ul>
+        </section>
+
+        <section id="offline-panel" class="panel" hidden>
+          <h2>Offline</h2>
+          <label class="field">Detail
+            <select id="offline-detail">
+              <option value="2">Standard</option>
+              <option value="4" selected>High</option>
+              <option value="6">Maximum</option>
+            </select>
+          </label>
+          <button id="offline-start">Save this view for offline</button>
+          <p id="offline-status" class="hint">Places you've already viewed are saved automatically.</p>
+        </section>
+
+        <section class="panel">
+          <h2>Settings</h2>
+          <label class="field">Mapillary access token
+            <input id="mapillary-token" type="password" placeholder="Optional, from mapillary.com/developer" />
+          </label>
+          <button id="clear-cache" hidden>Clear tile cache</button>
+        </section>
+
+        <footer id="credits-note" class="hint">Imagery and data credits appear at the bottom of the globe.</footer>
+      </aside>
+
+      <main id="globe"></main>
+
+      <section id="street-panel" hidden>
+        <header>
+          <span id="street-title">Street view</span>
+          <div class="row">
+            <button id="street-prev" title="Previous photo">&larr;</button>
+            <button id="street-next" title="Next photo">&rarr;</button>
+            <button id="street-google" title="Open this spot in Google Street View in your browser">Google</button>
+            <button id="street-close" title="Close">&times;</button>
+          </div>
+        </header>
+        <div id="street-viewer"></div>
+        <footer id="street-credit" class="hint"></footer>
+      </section>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
