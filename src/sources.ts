@@ -14,8 +14,10 @@ export interface ImagerySource {
   /** Only drawn once the view is this close (terrain level), to avoid seams at world scale. */
   showFromLevel?: number;
   enabledByDefault: boolean;
-  /** Treat pure black pixels as no-data and make them transparent. */
-  blackIsNoData?: boolean;
+  /** The server paints areas without imagery solid white or black; make them transparent. */
+  fillsNoData?: boolean;
+  /** Pixels where this returns true (lon, lat in degrees) are hidden; needs fillsNoData. */
+  outside?: (lon: number, lat: number) => boolean;
   /** Whether "Save this view for offline" may bulk-fetch this source. */
   offline: boolean;
   note?: string;
@@ -53,8 +55,12 @@ export const imagerySources: ImagerySource[] = [
     credit: 'Imagery: <a href="https://www.usgs.gov/programs/national-geospatial-program/national-map">USGS The National Map</a>',
     maximumLevel: 16,
     bounds: [-179.9, 17.5, -64.5, 71.5],
-    showFromLevel: 9,
-    blackIsNoData: true,
+    // Coarser USGS tiles blend in low-quality imagery past the border; Sentinel-2 is as sharp there.
+    showFromLevel: 12,
+    fillsNoData: true,
+    // US aerial photos spill a few km into Canada; the border is the 49th parallel
+    // from the Pacific to Lake of the Woods.
+    outside: (lon, lat) => lat > 49 && lon > -123.33 && lon < -95.15,
     enabledByDefault: true,
     offline: true,
   },

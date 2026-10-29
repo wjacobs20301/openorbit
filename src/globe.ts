@@ -1,7 +1,6 @@
 import {
   Cartesian2,
   Cartographic,
-  Color,
   Credit,
   ImageryLayer,
   Math as CesiumMath,
@@ -10,6 +9,7 @@ import {
   Viewer,
 } from 'cesium';
 import 'cesium/Build/Cesium/Widgets/widgets.css';
+import { NoDataImageryProvider } from './nodata';
 import { viaCache } from './platform';
 import { imagerySources, type ImagerySource } from './sources';
 import { createTerrainProvider } from './terrain';
@@ -42,17 +42,15 @@ export function createGlobe(container: string): { viewer: Viewer; layers: LayerE
   scene.globe.tileCacheSize = 400;
 
   const layers = imagerySources.map((source) => {
-    const provider = new UrlTemplateImageryProvider({
+    const Provider = source.fillsNoData ? NoDataImageryProvider : UrlTemplateImageryProvider;
+    const provider = new Provider({
       url: viaCache(source.url),
       maximumLevel: source.maximumLevel,
       credit: new Credit(source.credit),
       rectangle: source.bounds ? Rectangle.fromDegrees(...source.bounds) : undefined,
     });
-    const layer = new ImageryLayer(provider, {
-      minimumTerrainLevel: source.showFromLevel,
-      colorToAlpha: source.blackIsNoData ? Color.BLACK : undefined,
-      colorToAlphaThreshold: 0.02,
-    });
+    if (provider instanceof NoDataImageryProvider) provider.outside = source.outside;
+    const layer = new ImageryLayer(provider, { minimumTerrainLevel: source.showFromLevel });
     viewer.imageryLayers.add(layer);
     layer.show = source.enabledByDefault;
     return { source, layer };
