@@ -28,6 +28,47 @@ fn write_png_file(path: String, bytes: Vec<u8>) -> Result<(), String> {
     std::fs::write(&path, bytes).map_err(|e| e.to_string())
 }
 
+/// Writes a video the user picked in the "Save as" dialog. The bytes arrive raw (videos
+/// are large); the path comes percent-encoded in the `x-path` header.
+#[tauri::command]
+fn write_media_file(request: tauri::ipc::Request<'_>) -> Result<(), String> {
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err("Expected raw video bytes".into());
+    };
+    let path = request
+        .headers()
+        .get("x-path")
+        .and_then(|v| v.to_str().ok())
+        .map(percent_decode)
+        .ok_or("Missing path")?;
+    let allowed = Path::new(&path)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("mp4") || ext.eq_ignore_ascii_case("webm"));
+    if !allowed {
+        return Err("Only MP4 or WebM videos can be written".into());
+    }
+    std::fs::write(&path, bytes).map_err(|e| e.to_string())
+}
+
+/// Decodes %XX escapes (the path is sent with encodeURIComponent).
+fn percent_decode(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let Ok(b) = u8::from_str_radix(&s[i + 1..i + 3], 16) {
+                out.push(b);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
 #[tauri::command]
 fn clear_tile_cache(cache: tauri::State<'_, TileCache>) -> Result<usize, String> {
     cache.clear().map_err(|e| e.to_string())
@@ -50,7 +91,12 @@ pub fn run() {
                 responder.respond(cache.serve(request).await);
             });
         })
-        .invoke_handler(tauri::generate_handler![write_text_file, write_png_file, clear_tile_cache])
+        .invoke_handler(tauri::generate_handler![
+            write_text_file,
+            write_png_file,
+            write_media_file,
+            clear_tile_cache
+        ])
         .run(tauri::generate_context!())
         .expect("error while running OpenOrbit");
 }

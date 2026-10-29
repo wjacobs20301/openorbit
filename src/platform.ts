@@ -55,6 +55,28 @@ export async function savePngFile(defaultName: string, blob: Blob): Promise<void
   URL.revokeObjectURL(a.href);
 }
 
+/**
+ * Saves a large file (e.g. a video) with a native "Save as" dialog on desktop, or a
+ * download in the browser. Desktop sends the bytes raw rather than as JSON.
+ */
+export async function saveBinaryFile(defaultName: string, blob: Blob, ext: string): Promise<void> {
+  if (isDesktop) {
+    const { save } = await import('@tauri-apps/plugin-dialog');
+    const path = await save({ defaultPath: defaultName, filters: [{ name: ext.toUpperCase(), extensions: [ext] }] });
+    if (path) {
+      await invoke('write_media_file', new Uint8Array(await blob.arrayBuffer()), {
+        headers: { 'x-path': encodeURIComponent(path) },
+      });
+    }
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = defaultName;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 export async function clearTileCache(): Promise<number> {
   return isDesktop ? invoke<number>('clear_tile_cache') : 0;
 }

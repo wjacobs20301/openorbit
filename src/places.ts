@@ -129,6 +129,8 @@ export class Places {
   private readonly list = document.querySelector<HTMLUListElement>('#placemark-list')!;
   /** Called with a path's name and points when its 📈 button is clicked. */
   onProfile?: (name: string, positions: Cartesian3[]) => void;
+  /** Called with a path's name and points when its ▶ (fly along) button is clicked. */
+  onFlyAlong?: (name: string, positions: Cartesian3[]) => void;
   /** Called to open the Properties window for a feature. */
   onEdit?: (id: string) => void;
 
@@ -441,10 +443,10 @@ export class Places {
     const edit = button('✎', 'Properties (edit name, style, shape)', () => this.onEdit?.(f.id));
     li.append(visible, icon, name, go, edit);
     if (f.kind === 'line') {
+      const positions = () => f.coords.map(([lon, lat]) => Cartesian3.fromDegrees(lon, lat));
       li.append(
-        button('📈', 'Show elevation profile', () =>
-          this.onProfile?.(f.name, f.coords.map(([lon, lat]) => Cartesian3.fromDegrees(lon, lat))),
-        ),
+        button('▶', 'Fly along this path (makes a tour)', () => this.onFlyAlong?.(f.name, positions())),
+        button('📈', 'Show elevation profile', () => this.onProfile?.(f.name, positions())),
       );
     }
     li.append(button('×', `Delete ${KIND_NAMES[f.kind].toLowerCase()}`, () => this.remove(f.id)));

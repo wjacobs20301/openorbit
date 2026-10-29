@@ -495,6 +495,37 @@ button.primary { background: var(--accent); color: var(--accent-text); border-co
 .drop-here { outline: 2px dashed var(--accent); outline-offset: 2px; border-radius: 4px; }
 #placemark-list li[draggable='true'] { cursor: grab; }
 
+/* ---- Tours */
+#tour-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 34px;
+  transform: translateX(-50%);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(760px, calc(100% - 140px));
+  padding: 8px 12px;
+  background: rgb(32 36 41 / 0.92);
+  color: #f0f2f5;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.4);
+  color-scheme: dark;
+}
+#tour-bar[hidden] { display: none; }
+#tour-bar.recording { width: auto; }
+#tour-bar button, #tour-bar select { background: rgb(255 255 255 / 0.1); color: inherit; border-color: rgb(255 255 255 / 0.25); }
+#tour-bar .tour-play { width: 34px; font-size: 13px; }
+#tour-bar .tour-name { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#tour-bar .tour-scrub { flex: 1; min-width: 80px; }
+#tour-bar .tour-time { font: 12px ui-monospace, Menlo, monospace; white-space: nowrap; }
+#tour-bar .tour-close { border: 0; background: none; font-size: 18px; }
+.rec-dot { width: 10px; height: 10px; border-radius: 50%; background: #ff3b30; animation: rec 1s infinite alternate; }
+.rec-time { font: 12px ui-monospace, Menlo, monospace; }
+@keyframes rec { to { opacity: 0.3; } }
+#toolbar button.recording { background: rgb(255 59 48 / 0.18); border-color: #ff3b30; color: #ff3b30; }
+
 /* ---- Elevation profile */
 #profile-panel {
   position: absolute;

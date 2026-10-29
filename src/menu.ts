@@ -10,6 +10,8 @@ export interface AppActions {
   copyViewLocation(): void;
   elevationProfile(): void;
   makeStartLocation(): void;
+  recordTour(): void;
+  playTour(): void;
   find(): void;
   settings(): void;
   shortcuts(): void;
@@ -142,6 +144,7 @@ export async function setupMenu(a: AppActions): Promise<() => void> {
     items: [
       await item('Ruler', a.ruler, 'Alt+CmdOrCtrl+R'),
       await item('Street View', a.streetView),
+      await item('Play Tour…', a.playTour),
       await separator(),
       await item('Save This View for Offline…', a.settings),
     ],
@@ -153,6 +156,8 @@ export async function setupMenu(a: AppActions): Promise<() => void> {
       await item('Placemark', a.addPlacemark, 'Shift+CmdOrCtrl+P'),
       await item('Path', a.addPath, 'Shift+CmdOrCtrl+T'),
       await item('Polygon', a.addPolygon, 'Shift+CmdOrCtrl+G'),
+      await separator(),
+      await item('Tour (Record)', a.recordTour),
     ],
   });
 

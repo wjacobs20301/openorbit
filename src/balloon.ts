@@ -23,6 +23,9 @@ export class Balloon {
   private entity?: Entity;
   /** Called with a line feature when "Show elevation profile" is clicked. */
   onProfile?: (entity: Entity) => void;
+  /** Called with a line feature when "Fly along" is clicked. */
+  onFlyAlong?: (entity: Entity) => void;
+  private readonly flyLink = document.createElement('button');
   /** Called for "Edit" on features the user can edit (their own places). */
   onEdit?: (entity: Entity) => void;
   canEdit?: (entity: Entity) => boolean;
@@ -51,7 +54,14 @@ export class Balloon {
       this.close();
       if (entity) this.onEdit?.(entity);
     });
-    this.el.append(head, this.frame, this.profileLink, this.editLink);
+    this.flyLink.className = 'link';
+    this.flyLink.textContent = '▶ Fly along this line';
+    this.flyLink.addEventListener('click', () => {
+      const entity = this.entity;
+      this.close();
+      if (entity) this.onFlyAlong?.(entity);
+    });
+    this.el.append(head, this.frame, this.profileLink, this.flyLink, this.editLink);
     viewer.container.append(this.el);
     viewer.scene.postRender.addEventListener(() => this.place());
   }
@@ -80,6 +90,7 @@ export class Balloon {
     this.frame.hidden = !description;
     this.profileLink.hidden = !entity.polyline || !this.onProfile;
     this.editLink.hidden = !this.canEdit?.(entity);
+    this.flyLink.hidden = !entity.polyline || !this.onFlyAlong;
     this.frame.srcdoc = `<!doctype html><meta charset="utf-8"><base target="_blank"><style>${BALLOON_CSS}</style>${description}`;
     this.frame.onload = () => {
       const body = this.frame.contentDocument?.body;

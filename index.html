@@ -21,6 +21,9 @@
         <button data-tool="path" title="Add Path (⇧⌘T)" aria-label="Add Path">
           <svg viewBox="0 0 24 24"><path d="M4 19c3-1 3-6 7-7s5-5 9-7" /><circle cx="4" cy="19" r="1.6" /><circle cx="20" cy="5" r="1.6" /></svg>
         </button>
+        <button data-action="record-tour" title="Record a Tour" aria-label="Record a Tour">
+          <svg viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2" /><path d="M16 10l5-3v10l-5-3" /><circle cx="9.5" cy="12" r="2" class="rec" /></svg>
+        </button>
         <span class="sep"></span>
         <button data-action="history" title="Show Historical Imagery" aria-label="Show Historical Imagery">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" /><path d="M12 7v5l3 2" /><path d="M3 5v4h4" /></svg>
@@ -42,7 +45,7 @@
         <span class="spacer"></span>
         <span id="tool-hint" class="toolbar-hint"></span>
         <button data-action="settings" title="Settings (⌘,)" aria-label="Settings">
-          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" /></svg>
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>
         </button>
       </header>
 
@@ -64,6 +67,7 @@
             <div id="my-places-root" class="tree-folder" title="Drop places here to take them out of a folder">📁 My Places</div>
             <ul id="placemark-list" class="list tree-children"></ul>
             <ul id="kept-list" class="list tree-children"></ul>
+            <ul id="tour-list" class="list tree-children" title="Tours: double-click a name to rename"></ul>
             <div class="tree-folder">📁 Temporary Places</div>
             <ul id="import-list" class="list tree-children"></ul>
           </div>

@@ -31,6 +31,7 @@ import { setupSearch } from './search';
 import { setupScaleLegend } from './scale';
 import { setupStartView } from './startview';
 import { StreetView } from './streetview';
+import { Tours } from './tour';
 import { setupSun, type SunControl } from './sun';
 import { createTerrainProvider } from './terrain';
 import { openInGoogleEarthWeb, openInGoogleMaps, saveImage, viewLocation } from './viewtools';
@@ -79,6 +80,16 @@ const showLineProfile = (entity: Entity) => {
   if (positions?.length) void profile.show(entity.name ?? 'Line', positions);
 };
 balloon.onProfile = showLineProfile;
+const tours = new Tours(viewer);
+balloon.onFlyAlong = (entity) => {
+  const positions = entity.polyline?.positions?.getValue(JulianDate.now()) as Cartesian3[] | undefined;
+  if (positions?.length) void tours.fromLine(entity.name ?? 'line', positions);
+};
+places.onFlyAlong = (name, positions) => void tours.fromLine(name, positions);
+tours.onRecordingChange = (on) => {
+  document.querySelector('[data-action="record-tour"]')?.classList.toggle('recording', on);
+  hint.textContent = on ? 'Recording: fly around, then press Stop.' : '';
+};
 balloon.canEdit = (entity) => !!places.get(entity.id);
 balloon.onEdit = (entity) => editor.open(entity.id);
 places.onProfile = (name, positions) => void profile.show(name, positions);
@@ -379,6 +390,12 @@ const actions: AppActions = {
   saveImage: () => void saveImage(viewer),
   googleMaps: () => void openInGoogleMaps(viewer),
   googleEarthWeb: () => void openInGoogleEarthWeb(viewer),
+  recordTour: () => tours.toggleRecording(),
+  playTour: () => {
+    toggles.sidebar.set(true);
+    document.querySelector<HTMLDetailsElement>('[data-panel="places"]')!.open = true;
+    hint.textContent = 'Choose a tour under My Places and press ▶.';
+  },
   makeStartLocation: () => {
     startView.makeStart();
     hint.textContent = 'This view is now your start location (and the Home button goes here).';
@@ -418,6 +435,7 @@ const toolbarActions: Record<string, () => void> = {
   history: () => toggles.history.set(!historyCtl.open),
   sun: () => toggles.sun.set(!sunCtl.open),
   'save-image': actions.saveImage,
+  'record-tour': () => tours.toggleRecording(),
   'google-maps': actions.googleMaps,
   settings: actions.settings,
 };
