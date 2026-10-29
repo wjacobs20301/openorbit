@@ -7,6 +7,8 @@ Google Earth Pro. It reads public map data directly, so the project runs no serv
 
 - 3D globe with terrain (CesiumJS)
 - Imagery: Sentinel-2 cloudless (world, 10 m) and USGS imagery (US, sub-metre)
+- Optional sharp worldwide imagery with your own key: Esri World Imagery (ArcGIS
+  Location Platform) or Mapbox Satellite; these are never written to the disk cache
 - Time slider: Landsat back to 1984 (30 m), yearly Sentinel-2 from 2016, and a daily
   MODIS image for any date since February 2000 (250 m)
 - Place search (Photon / OpenStreetMap)
@@ -37,6 +39,7 @@ moves an endpoint or changes its terms.
 | Terrain | AWS Terrain Tiles | Open data, attribution required |
 | Search | Photon (komoot), OpenStreetMap | ODbL, fair use |
 | Labels, borders, roads, buildings | OpenFreeMap vector tiles (OpenMapTiles schema) | ODbL, free with attribution |
+| Sharp imagery (optional) | Esri World Imagery, Mapbox Satellite, user's own key | Provider terms; free tiers, attribution required |
 | Photorealistic 3D (optional) | Google Map Tiles API + Geocoding API, user's own key | Google Maps Platform terms; billed to the user |
 | Street photos | Panoramax, Mapillary | CC BY-SA 4.0 |
 

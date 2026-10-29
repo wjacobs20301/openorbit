@@ -1,13 +1,15 @@
 import { Credit, ImageryLayer, UrlTemplateImageryProvider, type Viewer } from 'cesium';
-import type { LayerEntry } from './globe';
 import { viaCache } from './platform';
 import { historySnapshots, MODIS_FIRST_DAY, modisCredit, modisDailyUrl } from './sources';
 
 /**
  * Time slider: shows a past imagery layer over the current one. While a past view is
- * showing, today's local high-resolution layers are hidden so they don't cover it.
+ * showing, today's high-resolution layers are hidden so they don't cover it.
+ *
+ * @param currentLayers today's detailed layers to hide during past views
+ * @param below the lowest overlay layer; past imagery goes directly beneath it
  */
-export function setupHistory(viewer: Viewer, layers: LayerEntry[]): void {
+export function setupHistory(viewer: Viewer, currentLayers: () => ImageryLayer[], below: ImageryLayer): void {
   const slider = document.querySelector<HTMLInputElement>('#time-slider')!;
   const label = document.querySelector<HTMLElement>('#time-label')!;
   const daily = document.querySelector<HTMLInputElement>('#time-daily')!;
@@ -22,24 +24,22 @@ export function setupHistory(viewer: Viewer, layers: LayerEntry[]): void {
   date.max = today;
   date.value = today;
 
-  // Local layers (anything with bounds) are current-day imagery; hide them for past views.
-  const localLayers = layers.filter((l) => l.source.bounds);
-  let savedShow: boolean[] | null = null;
+  let hidden: { layer: ImageryLayer; show: boolean }[] | null = null;
   let pastLayer: ImageryLayer | undefined;
 
   function show(url: string | null, credit = '', maximumLevel = 0): void {
     if (pastLayer) viewer.imageryLayers.remove(pastLayer, true);
     pastLayer = undefined;
     if (url) {
-      savedShow ??= localLayers.map((l) => l.layer.show);
-      localLayers.forEach((l) => (l.layer.show = false));
+      hidden ??= currentLayers().map((layer) => ({ layer, show: layer.show }));
+      hidden.forEach(({ layer }) => (layer.show = false));
       const provider = new UrlTemplateImageryProvider({ url: viaCache(url), maximumLevel, credit: new Credit(credit) });
-      // Directly above the base imagery, so borders and roads stay on top.
+      // Above today's imagery and below borders and roads.
       pastLayer = new ImageryLayer(provider);
-      viewer.imageryLayers.add(pastLayer, layers.length);
-    } else if (savedShow) {
-      localLayers.forEach((l, i) => (l.layer.show = savedShow![i]));
-      savedShow = null;
+      viewer.imageryLayers.add(pastLayer, viewer.imageryLayers.indexOf(below));
+    } else if (hidden) {
+      hidden.forEach(({ layer, show }) => (layer.show = show));
+      hidden = null;
     }
   }
 

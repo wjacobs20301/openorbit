@@ -6,6 +6,7 @@ import { createGlobe, formatCoords, pickGround } from './globe';
 import { Google3D } from './google3d';
 import { setupHistory } from './history';
 import { setupImport } from './importer';
+import { KeyedImagery } from './keyedimagery';
 import { Measure } from './measure';
 import { setupOffline } from './offline';
 import { PlaceLabels } from './labels';
@@ -52,7 +53,6 @@ const drawer = new Drawer(
 );
 setupSearch(viewer, () => (google3d.active ? loadSetting('googleKey') : null));
 setupImport(viewer);
-setupHistory(viewer, layers);
 setupOffline(viewer);
 
 // Handy for poking at the scene from devtools during development.
@@ -146,6 +146,13 @@ function addToggle(label: string, checked: boolean, onChange: (on: boolean) => v
 for (const { source, layer } of layers) {
   addToggle(source.name, layer.show, (on) => (layer.show = on), source.note);
 }
+// Overlays were added roads first, so roads is the lowest overlay layer.
+const keyedImagery = new KeyedImagery(viewer, overlays.roads, addToggle);
+setupHistory(
+  viewer,
+  () => [...layers.filter((l) => l.source.bounds).map((l) => l.layer), ...keyedImagery.current],
+  overlays.roads,
+);
 // Google's 3D Tiles replace the globe and must not be mixed with other map data,
 // so the OpenStreetMap layers stay off while they're showing.
 const openData = (on: boolean) => on && !google3d.active;

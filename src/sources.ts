@@ -66,6 +66,49 @@ export const imagerySources: ImagerySource[] = [
   },
 ];
 
+/**
+ * Sharp worldwide imagery from commercial services, used with the person's own key
+ * (each has a free tier). Not routed through the disk cache: their terms don't allow
+ * storing tiles, and the key would end up in cache file names.
+ */
+export interface KeyedImagerySource {
+  id: string;
+  name: string;
+  /** Settings key the API key is stored under. */
+  setting: string;
+  url: (key: string) => string;
+  credit: string;
+  maximumLevel: number;
+  tileSize: number;
+  /** Where to get a key, shown in Settings. */
+  signup: string;
+}
+
+export const keyedImagerySources: KeyedImagerySource[] = [
+  {
+    id: 'esri',
+    name: 'Esri World Imagery (your key)',
+    setting: 'esriKey',
+    url: (key) =>
+      `https://ibasemaps-api.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}?token=${encodeURIComponent(key)}`,
+    credit: 'Imagery: <a href="https://www.esri.com">Esri</a>, Vantor, Earthstar Geographics, and the GIS User Community',
+    // Deeper levels often return "map data not yet available" placeholders.
+    maximumLevel: 19,
+    tileSize: 256,
+    signup: 'https://location.arcgis.com',
+  },
+  {
+    id: 'mapbox',
+    name: 'Mapbox Satellite (your token)',
+    setting: 'mapboxToken',
+    url: (key) => `https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}@2x.jpg90?access_token=${encodeURIComponent(key)}`,
+    credit: '© <a href="https://www.mapbox.com/about/maps/">Mapbox</a> © <a href="https://www.maxar.com/">Maxar</a>',
+    maximumLevel: 21,
+    tileSize: 512,
+    signup: 'https://account.mapbox.com',
+  },
+];
+
 export interface HistorySnapshot {
   label: string;
   /** Sort key and slider position. */
