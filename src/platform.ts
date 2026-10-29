@@ -44,6 +44,11 @@ export async function clearTileCache(): Promise<number> {
   return isDesktop ? invoke<number>('clear_tile_cache') : 0;
 }
 
+/** True when a key press is going into a text field, so global shortcuts should ignore it. */
+export function isTyping(e: KeyboardEvent): boolean {
+  return e.target instanceof Element && !!e.target.closest('input, select, textarea');
+}
+
 export function loadSetting(key: string): string {
   try {
     return localStorage.getItem(`openorbit.${key}`) ?? '';

@@ -26,6 +26,19 @@ Google Earth Pro. It reads public map data directly, so the project runs no serv
 - Disk tile cache on desktop, so places you've visited load instantly and work offline
 - "Save this view for offline": prefetches the visible area (capped at 4,000 tiles)
 
+## Controls
+
+| Action | Mouse / trackpad | Keyboard |
+|---|---|---|
+| Move | Drag | Arrow keys |
+| Tilt and turn | Shift+drag (or middle-drag, Ctrl+drag) | Shift+arrows |
+| Look around in place | Option/Alt+drag | |
+| Zoom | Scroll / pinch | + and − |
+| Face north / top-down | Compass / Tilt buttons | N / T |
+
+In street view: drag or ←/→ to look around 360° photos, ↑/↓ (or W/S) to step along the
+route, F to expand the viewer.
+
 ## Data sources
 
 All endpoints live in [`src/sources.ts`](src/sources.ts). Update that file if a provider

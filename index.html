@@ -89,13 +89,18 @@
         <header>
           <span id="street-title">Street view</span>
           <div class="row">
-            <button id="street-prev" title="Previous photo">&larr;</button>
-            <button id="street-next" title="Next photo">&rarr;</button>
+            <button id="street-expand" title="Make the viewer bigger (F)">Expand</button>
             <button id="street-google" title="Open this spot in Google Street View in your browser">Google</button>
             <button id="street-close" title="Close">&times;</button>
           </div>
         </header>
-        <div id="street-viewer"></div>
+        <div id="street-stage">
+          <div id="street-viewer"></div>
+          <div id="street-nav">
+            <button id="street-prev" title="Step back along the route (↓ or S)">▼ Back</button>
+            <button id="street-next" title="Step forward along the route (↑ or W)">Forward ▲</button>
+          </div>
+        </div>
         <footer id="street-credit" class="hint"></footer>
       </section>
     </div>

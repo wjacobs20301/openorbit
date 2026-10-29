@@ -8,11 +8,12 @@ import { setupHistory } from './history';
 import { setupImport } from './importer';
 import { KeyedImagery } from './keyedimagery';
 import { Measure } from './measure';
+import { setupNavControls } from './navcontrols';
 import { setupOffline } from './offline';
 import { PlaceLabels } from './labels';
 import { addVectorOverlays } from './overlay';
 import { Places } from './places';
-import { clearTileCache, isDesktop, loadSetting, storeSetting } from './platform';
+import { clearTileCache, isDesktop, isTyping, loadSetting, storeSetting } from './platform';
 import { setupSearch } from './search';
 import { StreetView } from './streetview';
 
@@ -52,6 +53,8 @@ const drawer = new Drawer(
   },
 );
 setupSearch(viewer, () => (google3d.active ? loadSetting('googleKey') : null));
+// Street view owns the arrow keys while it's open.
+setupNavControls(viewer, () => !street.isOpen);
 setupImport(viewer);
 setupOffline(viewer);
 
@@ -83,7 +86,7 @@ toolButtons.forEach((b) => b.addEventListener('click', () => setTool(b.dataset.t
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') setTool(null);
   // Leave typing in sidebar fields alone.
-  if (!drawer.kind || (e.target as HTMLElement).closest('input, select, textarea')) return;
+  if (!drawer.kind || isTyping(e)) return;
   if (e.key === 'Enter') drawer.finish();
   if (e.key === 'Backspace') {
     e.preventDefault();

@@ -1,7 +1,7 @@
 import type { Viewer as SphereViewer } from '@photo-sphere-viewer/core';
 import { Cartesian3, Color, type Entity, type Viewer } from 'cesium';
 import type { Viewer as MapillaryViewer } from 'mapillary-js';
-import { loadSetting, openExternal } from './platform';
+import { isTyping, loadSetting, openExternal } from './platform';
 import { streetSources } from './sources';
 
 interface PanoramaxItem {
@@ -61,6 +61,29 @@ export class StreetView {
     });
     this.prev.addEventListener('click', () => void this.step('prev'));
     this.next.addEventListener('click', () => void this.step('next'));
+    const expand = document.querySelector<HTMLButtonElement>('#street-expand')!;
+    const toggleExpand = () => {
+      const on = this.panel.classList.toggle('expanded');
+      expand.textContent = on ? 'Shrink' : 'Expand';
+    };
+    expand.addEventListener('click', toggleExpand);
+
+    // Keyboard while the viewer is open: ↑/W forward, ↓/S back, F expand. Left/right
+    // turn the 360° view (handled by the photo viewer itself).
+    document.addEventListener('keydown', (e) => {
+      if (this.panel.hidden || isTyping(e)) return;
+      const key = e.key.toLowerCase();
+      if (key === 'arrowup' || key === 'w') void this.step('next');
+      else if (key === 'arrowdown' || key === 's') void this.step('prev');
+      else if (key === 'f') toggleExpand();
+      else return;
+      e.preventDefault();
+    });
+  }
+
+  /** True while the viewer is open, so other keyboard shortcuts can stand aside. */
+  get isOpen(): boolean {
+    return !this.panel.hidden;
   }
 
   async openAt(lon: number, lat: number): Promise<void> {
@@ -164,7 +187,8 @@ export class StreetView {
     this.position = [lon, lat];
     const is360 = item.properties['pers:interior_orientation']?.field_of_view === 360;
     const date = item.properties.datetime ? new Date(item.properties.datetime).toLocaleDateString() : '';
-    this.title.textContent = `Panoramax${date ? ` · ${date}` : ''}${is360 ? ' · 360°' : ''}`;
+    // Say whether it's a 360° photo: flat ones can't be turned.
+    this.title.textContent = `Panoramax${date ? ` · ${date}` : ''} · ${is360 ? '360° (drag or ←/→ to look around)' : 'photo, not 360°'}`;
     const author = item.providers?.map((p) => p.name).join(', ') ?? 'contributors';
     this.credit.innerHTML = `Photo by ${author} via <a href="https://panoramax.fr" target="_blank">Panoramax</a>, ${item.properties.license ?? 'open licence'}`;
     this.prev.hidden = !item.links.some((l) => l.rel === 'prev');
@@ -235,7 +259,20 @@ export class StreetView {
       import('@photo-sphere-viewer/core/index.css'),
     ]);
     this.container.innerHTML = '';
-    this.sphere = new SphereViewer({ container: this.container, panorama: src, navbar: ['zoom', 'fullscreen'] });
+    this.sphere = new SphereViewer({
+      container: this.container,
+      panorama: src,
+      navbar: ['moveLeft', 'moveRight', 'zoomOut', 'zoomIn'],
+      // Arrow keys turn the view without clicking it first; up/down step along the route.
+      // (PSV doesn't export its ACTIONS enum, so its string values are cast.)
+      keyboard: 'always',
+      keyboardActions: {
+        ArrowLeft: 'ROTATE_LEFT' as never,
+        ArrowRight: 'ROTATE_RIGHT' as never,
+        '+': 'ZOOM_IN' as never,
+        '-': 'ZOOM_OUT' as never,
+      },
+    });
   }
 
   /** Replaces the viewer with a short message, plus a Retry button when `retry` is given. */
