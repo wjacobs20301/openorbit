@@ -26,22 +26,36 @@ Google Earth Pro. It reads public map data directly, so the project runs no serv
 - Disk tile cache on desktop, so places you've visited load instantly and work offline
 - "Save this view for offline": prefetches the visible area (capped at 4,000 tiles)
 
-## Controls
+## Layout and controls
+
+The layout follows Google Earth Pro so it's familiar:
+
+- **Toolbar:** hide sidebar · add placemark, polygon, path · historical imagery · sun ·
+  ruler · save image · view in Google Maps · settings
+- **Sidebar:** Search (with history), Places (My Places and Temporary Places for opened
+  files, each with a show/hide checkbox), Layers (Imagery, Borders and Labels, Roads,
+  3D Buildings, Street photos, Terrain, Atmosphere)
+- **Navigation (top right):** look ring (drag to turn, N for north), move joystick,
+  street view person, zoom slider
+- **Status bar:** imagery date, pointer position, elevation, eye altitude
+- **Menus (desktop app):** File, Edit, View, Tools, Add, Window, Help
 
 | Action | Mouse / trackpad | Keyboard |
 |---|---|---|
 | Move | Drag | Arrow keys |
 | Tilt and turn | Shift+drag (or middle-drag, Ctrl+drag) | Shift+arrows |
 | Look around in place | Option/Alt+drag | |
-| Zoom | Scroll / pinch | + and − |
-| Face north / top-down | Compass / Tilt buttons | N / T |
+| Zoom | Scroll / pinch, zoom slider | + and − |
+| Reset north / tilt / both | Click N on the ring | N / U / R |
+| Add placemark / polygon / path | Toolbar | ⇧⌘P / ⇧⌘G / ⇧⌘T |
+| Sidebar · Search · Save image | | ⌥⌘B · ⌘F · ⌥⌘S |
 
-Street view: drag the person from the map controls onto a blue line (it snaps to the
-nearest photo), or use the Street view tool. The person on the map turns with your view.
-In street view: drag or ←/→ to look around 360° photos, click the road to move there
-(the ground cursor turns solid where there's a photo and shows ✕ where there isn't),
-↑/↓ (or W/S) to step along the route, F to expand the viewer. Moving keeps the direction
-you're facing.
+Street view: drag the person from the navigation controls onto a blue line (it snaps to
+the nearest photo), or click it and then click a blue line. The person on the map turns
+with your view. In street view: drag or ←/→ to look around 360° photos, click the road to
+move there (the ground cursor turns solid where there's a photo and shows ✕ where there
+isn't), ↑/↓ (or W/S) to step along the route, F to expand the viewer. Moving keeps the
+direction you're facing.
 
 ## Data sources
 

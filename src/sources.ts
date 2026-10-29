@@ -34,7 +34,7 @@ export function s2cloudlessCredit(year: number): string {
   return `Sentinel-2 cloudless ${year} by <a href="https://s2maps.eu">EOX IT Services GmbH</a> (contains modified Copernicus Sentinel data ${year}), ${licence}`;
 }
 
-const CURRENT_S2_YEAR = 2025;
+export const CURRENT_S2_YEAR = 2025;
 
 export const imagerySources: ImagerySource[] = [
   {

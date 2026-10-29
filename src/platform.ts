@@ -40,6 +40,21 @@ export async function saveTextFile(defaultName: string, contents: string): Promi
   URL.revokeObjectURL(a.href);
 }
 
+/** Save a PNG with a native "Save as" dialog on desktop, or a download in the browser. */
+export async function savePngFile(defaultName: string, blob: Blob): Promise<void> {
+  if (isDesktop) {
+    const { save } = await import('@tauri-apps/plugin-dialog');
+    const path = await save({ defaultPath: defaultName, filters: [{ name: 'PNG image', extensions: ['png'] }] });
+    if (path) await invoke('write_png_file', { path, bytes: Array.from(new Uint8Array(await blob.arrayBuffer())) });
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = defaultName;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 export async function clearTileCache(): Promise<number> {
   return isDesktop ? invoke<number>('clear_tile_cache') : 0;
 }

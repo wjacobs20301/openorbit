@@ -43,6 +43,11 @@ export class Pegman {
   private readonly ghost = document.createElement('img');
   private snapMarker?: Entity;
   private snapped: PhotoSpot | null = null;
+  private dragStart: [number, number] = [0, 0];
+  /** Coverage lines switched on in the Layers panel stay on. */
+  private pinned = false;
+  /** Called when the person is clicked rather than dragged. */
+  onTap?: () => void;
   private lookup = 0;
   private timer?: number;
 
@@ -63,7 +68,9 @@ export class Pegman {
     button.id = 'pegman';
     button.title = 'Drag onto a blue line to see street-level photos';
     button.innerHTML = `<img src="${PERSON_ICON}" alt="" draggable="false" />`;
-    document.querySelector('#nav-controls')?.prepend(button);
+    // Between the move control and the zoom slider, as in Google Earth.
+    const nav = document.querySelector('#nav-controls');
+    nav?.insertBefore(button, nav.querySelector('.nav-zoom'));
 
     this.ghost.src = PERSON_ICON;
     this.ghost.className = 'pegman-ghost';
@@ -89,11 +96,17 @@ export class Pegman {
 
   /** Blue coverage lines: shown while dragging, while street view is open, or on request. */
   showCoverage(on: boolean): void {
-    this.coverage.show = on || this.street.isOpen;
+    this.coverage.show = on || this.street.isOpen || this.pinned;
     this.viewer.scene.requestRender();
   }
 
+  setCoverageLayer(on: boolean): void {
+    this.pinned = on;
+    this.showCoverage(false);
+  }
+
   private startDrag(e: PointerEvent): void {
+    this.dragStart = [e.clientX, e.clientY];
     this.snapped = null;
     this.ghost.hidden = false;
     this.ghost.dataset.state = 'none';
@@ -112,6 +125,11 @@ export class Pegman {
   private async endDrag(e: PointerEvent): Promise<void> {
     window.clearTimeout(this.timer);
     this.ghost.hidden = true;
+    if (Math.hypot(e.clientX - this.dragStart[0], e.clientY - this.dragStart[1]) < 6) {
+      this.showCoverage(false);
+      this.onTap?.();
+      return;
+    }
     const ground = this.groundAt(e.clientX, e.clientY);
     const spot = ground ? (this.snapped ?? (await this.findSnap(e.clientX, e.clientY))) : null;
     // Ignore any lookups still in flight, then remove the drag preview.

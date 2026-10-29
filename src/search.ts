@@ -2,6 +2,7 @@ import { Cartesian3, Cartographic, Rectangle, type Viewer } from 'cesium';
 
 /** Never fly lower than this, so small places don't put the camera underground. */
 const MIN_VIEW_HEIGHT = 1500;
+import { loadSetting, storeSetting } from './platform';
 import { geocoder } from './sources';
 
 interface PhotonFeature {
@@ -30,9 +31,17 @@ function photonLabel(p: PhotonFeature['properties']): string {
 }
 
 async function searchPhoton(q: string, signal: AbortSignal): Promise<Place[]> {
-  const url = `${geocoder.url}?q=${encodeURIComponent(q)}&limit=8`;
+  const url = `${geocoder.url}?q=${encodeURIComponent(q)}&limit=12`;
   const data = (await (await fetch(url, { signal })).json()) as { features: PhotonFeature[] };
-  return data.features.map((f) => {
+  // OpenStreetMap often has a town, its district and its boundary under one name: list it once.
+  const seen = new Set<string>();
+  const unique = data.features.filter((f) => {
+    const key = photonLabel(f.properties);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return unique.slice(0, 8).map((f) => {
     const e = f.properties.extent;
     return {
       label: photonLabel(f.properties),
@@ -68,7 +77,7 @@ export function setupSearch(viewer: Viewer, googleKey: () => string | null): voi
   const results = document.querySelector<HTMLUListElement>('#search-results')!;
   let pending: AbortController | undefined;
 
-  const flyTo = (place: Place) => {
+  const flyTo = (place: Place, item?: HTMLLIElement) => {
     let destination = Cartesian3.fromDegrees(place.lon, place.lat, 3000);
     if (place.bounds) {
       const fit = Cartographic.fromCartesian(viewer.camera.getRectangleCameraCoordinates(Rectangle.fromDegrees(...place.bounds)));
@@ -76,16 +85,14 @@ export function setupSearch(viewer: Viewer, googleKey: () => string | null): voi
       destination = Cartographic.toCartesian(fit);
     }
     viewer.camera.flyTo({ destination });
-    results.hidden = true;
+    // Results stay listed (as in Google Earth); mark the one being shown.
+    results.querySelectorAll('li').forEach((li) => li.classList.toggle('selected', li === item));
   };
 
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const q = input.value.trim();
-    if (!q) return;
+  const run = async (q: string) => {
     pending?.abort();
     pending = new AbortController();
-    results.hidden = false;
+    remember(q);
     results.innerHTML = '<li class="hint">Searching…</li>';
     try {
       const key = googleKey();
@@ -95,12 +102,48 @@ export function setupSearch(viewer: Viewer, googleKey: () => string | null): voi
       for (const place of places) {
         const li = document.createElement('li');
         li.textContent = place.label;
-        li.addEventListener('click', () => flyTo(place));
+        li.addEventListener('click', () => flyTo(place, li));
         results.append(li);
       }
-      if (places.length === 1) flyTo(places[0]);
+      if (places.length) flyTo(places[0], results.querySelector('li')!);
     } catch (err) {
       if ((err as Error).name !== 'AbortError') results.innerHTML = '<li class="hint">Search is unavailable right now</li>';
     }
+  };
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const q = input.value.trim();
+    if (q) void run(q);
   });
+
+  // History: recent searches, newest first.
+  document.querySelector('#search-history')!.addEventListener('click', () => {
+    const past = recall();
+    results.innerHTML = past.length ? '' : '<li class="hint">No searches yet</li>';
+    for (const q of past) {
+      const li = document.createElement('li');
+      li.textContent = `🕘 ${q}`;
+      li.addEventListener('click', () => {
+        input.value = q;
+        void run(q);
+      });
+      results.append(li);
+    }
+  });
+}
+
+const HISTORY_KEY = 'searchHistory';
+const HISTORY_SIZE = 12;
+
+function recall(): string[] {
+  try {
+    return JSON.parse(loadSetting(HISTORY_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function remember(q: string): void {
+  storeSetting(HISTORY_KEY, JSON.stringify([q, ...recall().filter((x) => x !== q)].slice(0, HISTORY_SIZE)));
 }

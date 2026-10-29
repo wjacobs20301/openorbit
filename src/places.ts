@@ -24,6 +24,8 @@ interface Feature {
   coords: LonLat[];
   /** CSS hex colour, e.g. #ffcc33. */
   color: string;
+  /** Unticked in the Places list. */
+  hidden?: boolean;
 }
 
 const STORAGE_KEY = 'features';
@@ -91,9 +93,12 @@ export class Places {
     this.features.forEach((f) => this.addEntity(f));
     this.render();
 
-    document.querySelector('#kml-export')!.addEventListener('click', () => {
-      void saveTextFile('My Places.kml', toKml(this.features));
-    });
+    document.querySelector('#kml-export')!.addEventListener('click', () => void this.exportKml());
+  }
+
+  /** Saves My Places as a KML file (File > Save, or the Places panel button). */
+  exportKml(): Promise<void> {
+    return saveTextFile('My Places.kml', toKml(this.features));
   }
 
   addPoint(at: Cartographic): void {
@@ -130,6 +135,7 @@ export class Places {
     return this.source.entities.add({
       id: f.id,
       name: f.name,
+      show: !f.hidden,
       description: describe(f),
       position: Cartesian3.fromDegrees(...anchor),
       point:
@@ -179,13 +185,23 @@ export class Places {
   private render(): void {
     this.list.innerHTML = '';
     if (!this.features.length) {
-      this.list.innerHTML = '<li class="hint">Use Placemark, Path or Polygon to save places.</li>';
+      this.list.innerHTML = '<li class="hint">Use Add Placemark, Polygon or Path in the toolbar.</li>';
       return;
     }
     for (const f of this.features) {
       const li = document.createElement('li');
       li.dataset.id = f.id;
       li.title = describe(f);
+
+      const visible = document.createElement('input');
+      visible.type = 'checkbox';
+      visible.checked = !f.hidden;
+      visible.title = 'Show on the map';
+      visible.addEventListener('change', () => {
+        f.hidden = !visible.checked;
+        this.source.entities.getById(f.id)!.show = visible.checked;
+        this.persist();
+      });
 
       const icon = document.createElement('span');
       icon.className = 'kind-icon';
@@ -225,7 +241,7 @@ export class Places {
         this.persist();
         this.render();
       });
-      li.append(icon, name, color, go, remove);
+      li.append(visible, icon, name, color, go, remove);
       this.list.append(li);
     }
   }
