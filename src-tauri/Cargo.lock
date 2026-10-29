@@ -1386,18 +1386,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "google-earth-ultra"
-version = "0.1.0"
-dependencies = [
- "reqwest 0.12.28",
- "sha2",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-opener",
-]
-
-[[package]]
 name = "gtk"
 version = "0.18.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2445,6 +2433,18 @@ dependencies = [
  "dunce",
  "is-wsl",
  "libc",
+]
+
+[[package]]
+name = "openorbit"
+version = "0.1.0"
+dependencies = [
+ "reqwest 0.12.28",
+ "sha2",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-opener",
 ]
 
 [[package]]

@@ -46,7 +46,7 @@ export async function clearTileCache(): Promise<number> {
 
 export function loadSetting(key: string): string {
   try {
-    return localStorage.getItem(`geu.${key}`) ?? '';
+    return localStorage.getItem(`openorbit.${key}`) ?? '';
   } catch {
     return '';
   }
@@ -54,7 +54,7 @@ export function loadSetting(key: string): string {
 
 export function storeSetting(key: string, value: string): void {
   try {
-    localStorage.setItem(`geu.${key}`, value);
+    localStorage.setItem(`openorbit.${key}`, value);
   } catch {
     // Storage can be unavailable (private mode); settings then last for the session only.
   }

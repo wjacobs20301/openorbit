@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    google_earth_ultra_lib::run()
+    openorbit_lib::run()
 }

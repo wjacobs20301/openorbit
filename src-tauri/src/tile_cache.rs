@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tauri::http::{header, Request, Response, StatusCode};
 
-const USER_AGENT: &str = concat!("GoogleEarthUltra/", env!("CARGO_PKG_VERSION"), " (open-source desktop globe)");
+const USER_AGENT: &str = concat!("OpenOrbit/", env!("CARGO_PKG_VERSION"), " (open-source desktop globe)");
 
 #[derive(Clone)]
 pub struct TileCache {

@@ -40,5 +40,5 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![write_text_file, clear_tile_cache])
         .run(tauri::generate_context!())
-        .expect("error while running Google Earth Ultra");
+        .expect("error while running OpenOrbit");
 }

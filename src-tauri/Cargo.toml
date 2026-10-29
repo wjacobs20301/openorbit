@@ -1,12 +1,12 @@
 [package]
-name = "google-earth-ultra"
+name = "openorbit"
 version = "0.1.0"
 description = "Open-source desktop globe built on public map data"
 edition = "2021"
 license = "MIT"
 
 [lib]
-name = "google_earth_ultra_lib"
+name = "openorbit_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

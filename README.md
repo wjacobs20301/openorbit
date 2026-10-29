@@ -1,9 +1,7 @@
-# Google Earth Ultra
+# OpenOrbit
 
 An open-source desktop globe for macOS, Windows and Linux, built to fill the gap left by
 Google Earth Pro. It reads public map data directly, so the project runs no servers.
-
-> Note: "Google Earth" is a Google trademark. Pick a different name before publishing.
 
 ## Features
 
