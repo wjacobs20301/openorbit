@@ -7,12 +7,23 @@ import {
   type ImageryProvider,
   type Viewer,
 } from 'cesium';
+import type { VectorTile } from '@mapbox/vector-tile';
 import { vectorTiles } from './sources';
 import { features, loadVectorTile } from './vectortiles';
 
 const TILE_SIZE = 512;
 
-type Painter = (ctx: CanvasRenderingContext2D, layer: string, props: Record<string, unknown>, z: number) => boolean;
+export type Painter = (ctx: CanvasRenderingContext2D, layer: string, props: Record<string, unknown>, z: number) => boolean;
+
+/** Where a line overlay's vector tiles come from. */
+export interface TileSource {
+  load: (z: number, x: number, y: number) => Promise<VectorTile | null>;
+  /** Most detailed zoom the source has; deeper tiles are drawn from it, scaled up. */
+  maxZoom: number;
+  credit: string;
+}
+
+const openMapTiles: TileSource = { load: loadVectorTile, maxZoom: vectorTiles.maximumLevel, credit: vectorTiles.credit };
 
 /** Country and state borders. */
 const paintBorders: Painter = (ctx, layer, p, z) => {
@@ -61,10 +72,10 @@ const paintRoads: Painter = (ctx, layer, p, z) => {
 };
 
 /**
- * Draws line features from the vector tiles onto image tiles. Zoom levels beyond the
- * vector data (z14) reuse the z14 tile, scaled up.
+ * Draws line features from vector tiles onto image tiles. Zoom levels beyond the
+ * source's data reuse its most detailed tile, scaled up.
  */
-class VectorLineProvider {
+export class VectorLineProvider {
   readonly tilingScheme = new WebMercatorTilingScheme();
   readonly rectangle = this.tilingScheme.rectangle;
   readonly tileWidth = TILE_SIZE;
@@ -73,14 +84,17 @@ class VectorLineProvider {
   readonly maximumLevel = 18;
   readonly tileDiscardPolicy = undefined;
   readonly errorEvent = new Event();
-  readonly credit = new Credit(vectorTiles.credit);
+  readonly credit: Credit;
   readonly proxy = new DefaultProxy('');
   readonly hasAlphaChannel = true;
 
   constructor(
     private readonly layers: string[],
     private readonly passes: Painter[],
-  ) {}
+    private readonly source: TileSource = openMapTiles,
+  ) {
+    this.credit = new Credit(source.credit);
+  }
 
   getTileCredits(): Credit[] {
     return [];
@@ -91,7 +105,7 @@ class VectorLineProvider {
   }
 
   async requestImage(x: number, y: number, level: number): Promise<HTMLCanvasElement> {
-    const dz = Math.max(0, level - vectorTiles.maximumLevel);
+    const dz = Math.max(0, level - this.source.maxZoom);
     const z = level - dz;
     const [sx, sy] = [x >> dz, y >> dz];
     const scale = 2 ** dz;
@@ -99,7 +113,7 @@ class VectorLineProvider {
 
     const canvas = document.createElement('canvas');
     canvas.width = canvas.height = TILE_SIZE;
-    const tile = await loadVectorTile(z, sx, sy);
+    const tile = await this.source.load(z, sx, sy);
     if (!tile) return canvas;
 
     const ctx = canvas.getContext('2d')!;

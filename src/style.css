@@ -169,6 +169,24 @@ footer.hint { margin-top: auto; }
   transition: transform 0.1s linear;
 }
 #nav-controls .nav-help { min-width: 30px; font-weight: 700; }
+#nav-controls #pegman {
+  width: 44px;
+  height: 52px;
+  padding: 4px 0;
+  cursor: grab;
+  touch-action: none;
+}
+#nav-controls #pegman img { width: 26px; height: 38px; pointer-events: none; }
+.pegman-ghost {
+  position: fixed;
+  z-index: 100;
+  width: 28px;
+  height: 40px;
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.5));
+}
+.pegman-ghost[data-state='none'] { opacity: 0.55; }
 
 #status {
   position: absolute;

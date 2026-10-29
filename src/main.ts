@@ -12,6 +12,7 @@ import { setupNavControls } from './navcontrols';
 import { setupOffline } from './offline';
 import { PlaceLabels } from './labels';
 import { addVectorOverlays } from './overlay';
+import { Pegman } from './pegman';
 import { Places } from './places';
 import { clearTileCache, isDesktop, isTyping, loadSetting, storeSetting } from './platform';
 import { setupSearch } from './search';
@@ -55,6 +56,7 @@ const drawer = new Drawer(
 setupSearch(viewer, () => (google3d.active ? loadSetting('googleKey') : null));
 // Street view owns the arrow keys while it's open.
 setupNavControls(viewer, () => !street.isOpen);
+const pegman = new Pegman(viewer, street);
 setupImport(viewer);
 setupOffline(viewer);
 
@@ -67,7 +69,7 @@ const hints: Record<Exclude<Tool, null>, string> = {
   path: 'Click to add points along the path.',
   polygon: 'Click to add the corners of the shape.',
   measure: 'Click points on the globe to measure. Choose Measure again to clear.',
-  street: 'Click near a road to see street-level photos.',
+  street: 'Click a blue line to see street-level photos, or drag the person from the top right.',
 };
 let tool: Tool = null;
 const toolButtons = document.querySelectorAll<HTMLButtonElement>('[data-tool]');
@@ -79,6 +81,7 @@ function setTool(next: Tool): void {
   toolButtons.forEach((b) => b.classList.toggle('active', b.dataset.tool === tool));
   hint.textContent = tool ? hints[tool] : '';
   viewer.canvas.style.cursor = tool ? 'crosshair' : '';
+  pegman.showCoverage(tool === 'street');
   if (tool === 'path') drawer.start('line');
   if (tool === 'polygon') drawer.start('polygon');
 }

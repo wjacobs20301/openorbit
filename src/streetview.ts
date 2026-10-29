@@ -1,6 +1,14 @@
 import type { Viewer as SphereViewer } from '@photo-sphere-viewer/core';
-import { Cartesian3, Color, type Entity, type Viewer } from 'cesium';
+import {
+  CallbackProperty,
+  Cartesian3,
+  HeightReference,
+  VerticalOrigin,
+  type Entity,
+  type Viewer,
+} from 'cesium';
 import type { Viewer as MapillaryViewer } from 'mapillary-js';
+import { PERSON_ICON, VIEW_CONE } from './icons';
 import { photosNear, type PhotoSpot } from './photomap';
 import { isTyping, loadSetting, openExternal } from './platform';
 import { streetSources } from './sources';
@@ -80,7 +88,11 @@ export class StreetView {
   private sphere?: SphereViewer;
   private mapillary?: MapillaryViewer;
   private item?: PanoramaxItem;
-  private marker?: Entity;
+  /** The person on the map and the view cone under it. */
+  private markers: Entity[] = [];
+  /** Compass direction (degrees) being looked at, shown by the cone on the map. */
+  private heading = 0;
+  private visibilityListeners: ((open: boolean) => void)[] = [];
   private position: [number, number] = [0, 0];
   /** Bumped per photo, so slow downloads for a photo no longer shown are ignored. */
   private loadId = 0;
@@ -134,9 +146,35 @@ export class StreetView {
     return !this.panel.hidden;
   }
 
+  /** Called with true when the viewer opens and false when it closes. */
+  onVisibilityChange(listener: (open: boolean) => void): void {
+    this.visibilityListeners.push(listener);
+  }
+
+  private show(): void {
+    if (!this.panel.hidden) return;
+    this.panel.hidden = false;
+    this.visibilityListeners.forEach((l) => l(true));
+  }
+
+  /** Opens a known Panoramax photo (e.g. where the person was dropped on the map). */
+  async openSpot(spot: PhotoSpot): Promise<void> {
+    this.show();
+    this.title.textContent = 'Loading photo…';
+    this.credit.textContent = '';
+    try {
+      const url = `${streetSources.panoramaxApi}/collections/${spot.sequence}/items/${spot.id}`;
+      const item = (await (await fetch(url, { signal: AbortSignal.timeout(PHOTO_TIMEOUT) })).json()) as PanoramaxItem;
+      this.reset();
+      await this.showPanoramax(item);
+    } catch {
+      await this.openAt(spot.lon, spot.lat);
+    }
+  }
+
   async openAt(lon: number, lat: number): Promise<void> {
     this.position = [lon, lat];
-    this.panel.hidden = false;
+    this.show();
     this.title.textContent = 'Looking for photos…';
     this.credit.textContent = '';
 
@@ -153,8 +191,14 @@ export class StreetView {
   close(): void {
     this.panel.hidden = true;
     this.reset();
-    if (this.marker) this.viewer.entities.remove(this.marker);
-    this.marker = undefined;
+    this.markers.forEach((m) => this.viewer.entities.remove(m));
+    this.markers = [];
+    this.visibilityListeners.forEach((l) => l(false));
+  }
+
+  private setHeading(heading: number): void {
+    this.heading = heading;
+    this.viewer.scene.requestRender();
   }
 
   private reset(): void {
@@ -200,6 +244,7 @@ export class StreetView {
         this.position = [ll.lng, ll.lat];
         this.placeMarker(ll.lng, ll.lat);
       });
+      this.mapillary.on('bearing', (e) => this.setHeading(e.bearing));
       return true;
     } catch {
       return false;
@@ -400,6 +445,7 @@ export class StreetView {
     const previous = this.objectUrls;
     this.objectUrls = [src];
 
+    this.setHeading(spherical && look ? look.heading : azimuth(item));
     if (spherical) {
       // Turn the new photo to face the same compass direction as before.
       const position = look ? { yaw: (look.heading - azimuth(item)) / DEG, pitch: look.pitch } : undefined;
@@ -478,6 +524,10 @@ export class StreetView {
         '-': 'ZOOM_OUT' as never,
       },
     });
+    // Keep the cone on the map pointing where the photo is looked at.
+    this.sphere.addEventListener('position-updated', ({ position }) => {
+      if (this.item) this.setHeading(azimuth(this.item) + position.yaw * DEG);
+    });
     // Click a spot on the road to move there (drags don't count as clicks).
     this.sphere.addEventListener('click', ({ data }) => {
       if (!data.rightclick && this.item) void this.moveToward(azimuth(this.item) + data.yaw * DEG, data.pitch);
@@ -505,17 +555,28 @@ export class StreetView {
     this.objectUrls = [];
   }
 
+  /** Puts the person on the map, with a cone showing which way the photo is being looked at. */
   private placeMarker(lon: number, lat: number): void {
-    if (this.marker) this.viewer.entities.remove(this.marker);
-    this.marker = this.viewer.entities.add({
-      position: Cartesian3.fromDegrees(lon, lat),
-      point: {
-        pixelSize: 14,
-        color: Color.fromCssColorString('#ff7a1a'),
-        outlineColor: Color.WHITE,
-        outlineWidth: 2,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      },
-    });
+    this.markers.forEach((m) => this.viewer.entities.remove(m));
+    const position = Cartesian3.fromDegrees(lon, lat);
+    const common = { heightReference: HeightReference.CLAMP_TO_GROUND, disableDepthTestDistance: Number.POSITIVE_INFINITY };
+    this.markers = [
+      this.viewer.entities.add({
+        position,
+        billboard: {
+          ...common,
+          image: VIEW_CONE,
+          width: 90,
+          height: 90,
+          // With the axis set to the Earth's, rotation is measured from north (counter-clockwise).
+          alignedAxis: Cartesian3.UNIT_Z,
+          rotation: new CallbackProperty(() => -this.heading / DEG, false),
+        },
+      }),
+      this.viewer.entities.add({
+        position,
+        billboard: { ...common, image: PERSON_ICON, width: 28, height: 40, verticalOrigin: VerticalOrigin.BOTTOM },
+      }),
+    ];
   }
 }
