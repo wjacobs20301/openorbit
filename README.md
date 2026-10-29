@@ -11,6 +11,9 @@ Google Earth Pro. It reads public map data directly, so the project runs no serv
   MODIS image for any date since February 2000 (250 m)
 - Place search (Photon / OpenStreetMap)
 - Place names, country/state borders and roads from OpenStreetMap vector tiles
+- 3D buildings worldwide from OpenStreetMap (heights and colours from the map data)
+- Optional Google Photorealistic 3D Tiles with your own Google Maps API key; search
+  switches to Google's geocoder while they're on, as Google's terms require
 - Placemarks, paths and polygons with colours, live length/area, saved between
   sessions and exported as styled KML
 - Import KML/KMZ, GeoJSON, GPX, CSV (latitude/longitude columns) and shapefiles
@@ -33,7 +36,8 @@ moves an endpoint or changes its terms.
 | US imagery | USGS The National Map | Public domain |
 | Terrain | AWS Terrain Tiles | Open data, attribution required |
 | Search | Photon (komoot), OpenStreetMap | ODbL, fair use |
-| Labels, borders, roads | OpenFreeMap vector tiles (OpenMapTiles schema) | ODbL, free with attribution |
+| Labels, borders, roads, buildings | OpenFreeMap vector tiles (OpenMapTiles schema) | ODbL, free with attribution |
+| Photorealistic 3D (optional) | Google Map Tiles API + Geocoding API, user's own key | Google Maps Platform terms; billed to the user |
 | Street photos | Panoramax, Mapillary | CC BY-SA 4.0 |
 
 Please be a good citizen of these free services: keep the cache on and don't add bulk
@@ -86,6 +90,7 @@ type-check and build, plus `cargo clippy` on the desktop shell.
   - `search.ts`, `places.ts` (saved places + KML export), `draw.ts` (paths/polygons),
     `measure.ts`, `streetview.ts`, `geometry.ts` (length/area)
   - `vectortiles.ts` tile loading, `overlay.ts` borders/roads, `labels.ts` place names
+  - `buildings.ts` OpenStreetMap 3D buildings, `google3d.ts` Google 3D Tiles
   - `history.ts` time slider, `importer.ts` GIS file import, `offline.ts` area downloads
   - `platform.ts` desktop/browser helpers, `sources.ts` data endpoints
 - `src-tauri/` – desktop shell (Rust): `tile_cache.rs` serves `tiles://` requests from disk

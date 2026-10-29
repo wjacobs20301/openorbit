@@ -1,7 +1,9 @@
 import { Math as CesiumMath, ScreenSpaceEventHandler, ScreenSpaceEventType } from 'cesium';
+import { Buildings } from './buildings';
 import { Drawer } from './draw';
 import './style.css';
 import { createGlobe, formatCoords, pickGround } from './globe';
+import { Google3D } from './google3d';
 import { setupHistory } from './history';
 import { setupImport } from './importer';
 import { Measure } from './measure';
@@ -18,6 +20,8 @@ type Tool = 'placemark' | 'path' | 'polygon' | 'measure' | 'street' | null;
 const { viewer, layers } = createGlobe('globe');
 const overlays = addVectorOverlays(viewer);
 const labels = new PlaceLabels(viewer);
+const buildings = new Buildings(viewer);
+const google3d = new Google3D(viewer);
 const places = new Places(viewer);
 const hint = document.querySelector<HTMLParagraphElement>('#tool-hint')!;
 const measure = new Measure(viewer, (summary) => (hint.textContent = summary));
@@ -30,7 +34,7 @@ const drawer = new Drawer(
     setTool(null);
   },
 );
-setupSearch(viewer);
+setupSearch(viewer, () => (google3d.active ? loadSetting('googleKey') : null));
 setupImport(viewer);
 setupHistory(viewer, layers);
 setupOffline(viewer);
@@ -107,7 +111,7 @@ handler.setInputAction(({ endPosition }: ScreenSpaceEventHandler.MotionEvent) =>
 
 // Layers panel.
 const layerList = document.querySelector<HTMLUListElement>('#layer-list')!;
-function addToggle(label: string, checked: boolean, onChange: (on: boolean) => void, note?: string): void {
+function addToggle(label: string, checked: boolean, onChange: (on: boolean) => void, note?: string): HTMLInputElement {
   const li = document.createElement('li');
   const box = document.createElement('input');
   box.type = 'checkbox';
@@ -118,13 +122,58 @@ function addToggle(label: string, checked: boolean, onChange: (on: boolean) => v
   if (note) text.title = note;
   li.append(box, text);
   layerList.append(li);
+  return box;
 }
 for (const { source, layer } of layers) {
   addToggle(source.name, layer.show, (on) => (layer.show = on), source.note);
 }
-addToggle('Place names', true, (on) => labels.setEnabled(on));
-addToggle('Borders', overlays.borders.show, (on) => (overlays.borders.show = on));
-addToggle('Roads', overlays.roads.show, (on) => (overlays.roads.show = on));
+// Google's 3D Tiles replace the globe and must not be mixed with other map data,
+// so the OpenStreetMap layers stay off while they're showing.
+const openData = (on: boolean) => on && !google3d.active;
+const openDataToggles = [
+  addToggle('Place names', true, (on) => labels.setEnabled(openData(on))),
+  addToggle('Borders', overlays.borders.show, (on) => (overlays.borders.show = openData(on))),
+  addToggle('Roads', overlays.roads.show, (on) => (overlays.roads.show = openData(on))),
+  addToggle('3D buildings (OpenStreetMap)', true, (on) => buildings.setEnabled(openData(on))),
+];
+function refreshOpenData(): void {
+  for (const box of openDataToggles) {
+    box.disabled = google3d.active;
+    box.dispatchEvent(new Event('change'));
+  }
+}
+
+const googleToggle = addToggle(
+  'Google photorealistic 3D (your key)',
+  false,
+  async (on) => {
+    const key = loadSetting('googleKey');
+    if (on && !key) {
+      googleToggle.checked = false;
+      hint.textContent = 'Add a Google Maps API key in Settings first.';
+      return;
+    }
+    if (on) {
+      try {
+        await google3d.enable(key);
+        refreshOpenData();
+        hint.textContent = 'Showing Google 3D. Search now uses Google.';
+      } catch (err) {
+        googleToggle.checked = false;
+        // Cesium rejects with a RequestErrorEvent (statusCode, no message) for HTTP errors.
+        const status = (err as { statusCode?: number }).statusCode;
+        hint.textContent = status
+          ? `Google rejected the key (HTTP ${status}). Check it and that the Map Tiles API is enabled.`
+          : `Google 3D Tiles failed: ${(err as Error).message ?? err}`;
+      }
+    } else {
+      google3d.disable();
+      refreshOpenData();
+      hint.textContent = '';
+    }
+  },
+  'Uses Google Map Tiles API with your own key; usage is billed to your Google Cloud account.',
+);
 addToggle('Sun lighting', false, (on) => (viewer.scene.globe.enableLighting = on));
 addToggle('Terrain shading (atmosphere)', true, (on) => (viewer.scene.globe.showGroundAtmosphere = on));
 
@@ -132,6 +181,9 @@ addToggle('Terrain shading (atmosphere)', true, (on) => (viewer.scene.globe.show
 const tokenInput = document.querySelector<HTMLInputElement>('#mapillary-token')!;
 tokenInput.value = loadSetting('mapillaryToken');
 tokenInput.addEventListener('change', () => storeSetting('mapillaryToken', tokenInput.value.trim()));
+const googleKeyInput = document.querySelector<HTMLInputElement>('#google-key')!;
+googleKeyInput.value = loadSetting('googleKey');
+googleKeyInput.addEventListener('change', () => storeSetting('googleKey', googleKeyInput.value.trim()));
 
 const clearButton = document.querySelector<HTMLButtonElement>('#clear-cache')!;
 clearButton.hidden = !isDesktop;
