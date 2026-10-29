@@ -228,7 +228,18 @@ function addToggle(
   const box = document.createElement('input');
   box.type = 'checkbox';
   box.checked = checked;
-  box.addEventListener('change', () => onChange(box.checked));
+  // Each layer remembers whether it was on, across restarts.
+  const key = `layer.${group ?? ''}.${label}`;
+  box.addEventListener('change', () => {
+    storeSetting(key, box.checked ? 'on' : 'off');
+    onChange(box.checked);
+  });
+  const saved = loadSetting(key);
+  if (saved && (saved === 'on') !== checked) {
+    box.checked = saved === 'on';
+    // Applied once startup finishes, when everything the toggle uses exists.
+    queueMicrotask(() => onChange(box.checked));
+  }
   const text = document.createElement('label');
   text.textContent = label;
   if (note) li.title = note;
@@ -312,6 +323,7 @@ function setAtmosphere(on: boolean): void {
   viewer.scene.globe.showGroundAtmosphere = on;
   if (viewer.scene.skyAtmosphere) viewer.scene.skyAtmosphere.show = on;
   atmosphereBox.checked = on;
+  storeSetting('layer..Atmosphere', on ? 'on' : 'off');
   redraw();
   syncViewState();
 }
@@ -333,6 +345,7 @@ const shortcutsDialog = document.querySelector<HTMLDialogElement>('#shortcuts-di
 
 function setPanelShown(cls: string, shown: boolean): void {
   app.classList.toggle(cls, !shown);
+  storeSetting(`view.${cls}`, shown ? 'shown' : 'hidden');
   // The globe's canvas needs to notice its new size.
   window.setTimeout(() => {
     viewer.resize();
@@ -350,6 +363,7 @@ const toggles: AppActions['toggles'] = {
     get: () => scaleLegend.shown,
     set: (on) => {
       scaleLegend.setShown(on);
+      storeSetting('view.scaleLegend', on ? 'shown' : 'hidden');
       syncViewState();
     },
   },
@@ -467,6 +481,12 @@ clearButton.addEventListener('click', async () => {
   const removed = await clearTileCache();
   clearButton.textContent = `Cleared ${removed} cached tiles`;
 });
+
+// Restore the View menu's show/hide choices from last time.
+for (const cls of ['no-toolbar', 'no-sidebar', 'no-status', 'no-nav']) {
+  if (loadSetting(`view.${cls}`) === 'hidden') app.classList.add(cls);
+}
+if (loadSetting('view.scaleLegend') === 'hidden') scaleLegend.setShown(false);
 
 updateStatus();
 syncViewState();
