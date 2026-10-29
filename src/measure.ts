@@ -4,15 +4,11 @@ import {
   Cartesian3,
   Cartographic,
   Color,
-  EllipsoidGeodesic,
   LabelStyle,
   type Entity,
   type Viewer,
 } from 'cesium';
-
-function formatDistance(m: number): string {
-  return m >= 1000 ? `${(m / 1000).toFixed(2)} km (${(m / 1609.344).toFixed(2)} mi)` : `${m.toFixed(1)} m (${(m * 3.28084).toFixed(0)} ft)`;
-}
+import { formatDistance, pathLength, toLonLat } from './geometry';
 
 /** Click-to-add ground distance measurement along geodesics. */
 export class Measure {
@@ -54,11 +50,7 @@ export class Measure {
   }
 
   total(): number {
-    let sum = 0;
-    for (let i = 1; i < this.points.length; i++) {
-      sum += new EllipsoidGeodesic(this.points[i - 1], this.points[i]).surfaceDistance;
-    }
-    return sum;
+    return pathLength(this.points.map(toLonLat));
   }
 
   clear(): void {

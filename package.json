@@ -10,12 +10,14 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@mapbox/vector-tile": "^3.0.0",
     "@photo-sphere-viewer/core": "^5.15.1",
     "@tauri-apps/api": "^2.12.4",
     "@tauri-apps/plugin-dialog": "^2.8.4",
     "@tauri-apps/plugin-opener": "^2.7.2",
     "cesium": "^1.146.0",
     "mapillary-js": "^4.1.2",
+    "pbf": "^5.1.2",
     "shpjs": "^6.2.0"
   },
   "devDependencies": {

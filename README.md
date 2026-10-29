@@ -10,7 +10,9 @@ Google Earth Pro. It reads public map data directly, so the project runs no serv
 - Time slider: Landsat back to 1984 (30 m), yearly Sentinel-2 from 2016, and a daily
   MODIS image for any date since February 2000 (250 m)
 - Place search (Photon / OpenStreetMap)
-- Placemarks, saved between sessions, exported as KML
+- Place names, country/state borders and roads from OpenStreetMap vector tiles
+- Placemarks, paths and polygons with colours, live length/area, saved between
+  sessions and exported as styled KML
 - Import KML/KMZ, GeoJSON, GPX, CSV (latitude/longitude columns) and shapefiles
   (zipped, or .shp with its .dbf/.prj), with no vertex limit
 - Distance measuring
@@ -31,6 +33,7 @@ moves an endpoint or changes its terms.
 | US imagery | USGS The National Map | Public domain |
 | Terrain | AWS Terrain Tiles | Open data, attribution required |
 | Search | Photon (komoot), OpenStreetMap | ODbL, fair use |
+| Labels, borders, roads | OpenFreeMap vector tiles (OpenMapTiles schema) | ODbL, free with attribution |
 | Street photos | Panoramax, Mapillary | CC BY-SA 4.0 |
 
 Please be a good citizen of these free services: keep the cache on and don't add bulk
@@ -80,7 +83,9 @@ type-check and build, plus `cargo clippy` on the desktop shell.
 
 - `src/` – web front end (TypeScript, CesiumJS)
   - `globe.ts` viewer and imagery layers, `terrain.ts` terrain from Terrarium tiles
-  - `search.ts`, `places.ts` (placemarks + KML export), `measure.ts`, `streetview.ts`
+  - `search.ts`, `places.ts` (saved places + KML export), `draw.ts` (paths/polygons),
+    `measure.ts`, `streetview.ts`, `geometry.ts` (length/area)
+  - `vectortiles.ts` tile loading, `overlay.ts` borders/roads, `labels.ts` place names
   - `history.ts` time slider, `importer.ts` GIS file import, `offline.ts` area downloads
   - `platform.ts` desktop/browser helpers, `sources.ts` data endpoints
 - `src-tauri/` – desktop shell (Rust): `tile_cache.rs` serves `tiles://` requests from disk

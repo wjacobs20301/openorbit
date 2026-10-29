@@ -34,7 +34,9 @@ export function setupHistory(viewer: Viewer, layers: LayerEntry[]): void {
       savedShow ??= localLayers.map((l) => l.layer.show);
       localLayers.forEach((l) => (l.layer.show = false));
       const provider = new UrlTemplateImageryProvider({ url: viaCache(url), maximumLevel, credit: new Credit(credit) });
-      pastLayer = viewer.imageryLayers.addImageryProvider(provider);
+      // Directly above the base imagery, so borders and roads stay on top.
+      pastLayer = new ImageryLayer(provider);
+      viewer.imageryLayers.add(pastLayer, layers.length);
     } else if (savedShow) {
       localLayers.forEach((l, i) => (l.layer.show = savedShow![i]));
       savedShow = null;

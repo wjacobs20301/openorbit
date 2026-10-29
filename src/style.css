@@ -99,6 +99,8 @@ button.active { background: var(--accent); color: var(--accent-text); border-col
 .list li input:not([type='checkbox']) { flex: 1; min-width: 0; }
 .list li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .list button { padding: 2px 8px; }
+.list input[type='color'] { width: 26px; height: 24px; padding: 1px; flex: none; cursor: pointer; }
+.kind-icon { flex: none !important; width: 14px; text-align: center; }
 
 .wide { width: 100%; }
 .time-label { margin: 2px 0 8px; font-weight: 600; }

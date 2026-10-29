@@ -105,6 +105,15 @@ export const terrainSource = {
   maximumLevel: 15,
 };
 
+/** OpenStreetMap vector tiles (OpenMapTiles schema) for labels, borders and roads. */
+export const vectorTiles = {
+  // TileJSON; the tile URL inside it changes with each weekly data release.
+  tileJsonUrl: 'https://tiles.openfreemap.org/planet',
+  credit:
+    '<a href="https://openfreemap.org">OpenFreeMap</a> © <a href="https://www.openmaptiles.org/">OpenMapTiles</a>, data © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  maximumLevel: 14,
+};
+
 export const geocoder = {
   url: 'https://photon.komoot.io/api/',
   credit: 'Search by <a href="https://photon.komoot.io">Photon</a>, data © OpenStreetMap contributors',
