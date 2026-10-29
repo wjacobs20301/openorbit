@@ -324,19 +324,16 @@ input[type='range'] { padding: 0; accent-color: var(--accent); }
 .nav-knob svg { width: 16px; height: 16px; }
 .nav-arrow {
   position: absolute;
-  width: 20px;
-  height: 20px;
-  padding: 0;
+  width: 18px;
+  height: 18px;
   display: grid;
   place-items: center;
-  border: 0;
-  border-radius: 50%;
-  background: transparent !important;
-  touch-action: none;
+  color: rgb(255 255 255 / 0.75);
+  pointer-events: none;
+  transition: color 0.1s, transform 0.1s;
 }
-.nav-arrow:hover { background: rgb(255 255 255 / 0.18) !important; }
-.nav-arrow:active { background: rgb(122 170 255 / 0.5) !important; }
 .nav-arrow svg { width: 12px; height: 12px; stroke-width: 2.2; }
+.nav-arrow.lit { color: #8fbaff; }
 .nav-arrow.up { top: 1px; left: 50%; transform: translateX(-50%); }
 .nav-arrow.down { bottom: 1px; left: 50%; transform: translateX(-50%); }
 .nav-arrow.left { left: 1px; top: 50%; transform: translateY(-50%); }

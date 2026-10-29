@@ -11,6 +11,15 @@ import {
 import { isTyping } from './platform';
 
 const KEY_TURN_STEP = CesiumMath.toRadians(10);
+/** Joystick speeds at full push, per second (tuned to feel like Google Earth's). */
+const LOOK_TURN_RATE = CesiumMath.toRadians(45);
+const LOOK_TILT_RATE = CesiumMath.toRadians(30);
+/** Highest you can look, above the horizon. */
+const LOOK_MAX_PITCH = CesiumMath.toRadians(60);
+/** Share of the altitude covered per second: about half a screen width. */
+const MOVE_RATE = 0.5;
+/** Share of the distance to the ground zoomed per second. */
+const ZOOM_RATE = 1.2;
 const KEY_TILT_STEP = CesiumMath.toRadians(8);
 /** Closest to the horizon the controls will tilt (radians below horizontal). */
 const MIN_PITCH = CesiumMath.toRadians(-8);
@@ -90,47 +99,78 @@ function capture(el: HTMLElement, e: PointerEvent): void {
   }
 }
 
+/** Below this share of the radius a joystick does nothing, so a plain press doesn't drift. */
+const DEAD_ZONE = 0.1;
+
 /**
- * Google Earth–style joystick: press anywhere inside `el` and drag. While held, `step`
- * runs repeatedly with the knob's offset from the centre (x right, y down, each −1…1).
- * Arrow buttons inside keep working as plain buttons.
+ * Runs `step(dt)` every frame while `active()` holds, with `dt` in seconds, so speeds
+ * are per second and stay smooth however often frames arrive.
  */
-function joystick(el: HTMLElement, step: (x: number, y: number) => void, viewer: Viewer): void {
+function frameLoop(active: () => boolean, step: (dt: number) => void, viewer: Viewer): void {
+  let last = performance.now();
+  const tick = (now: number) => {
+    if (!active()) return;
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    step(dt);
+    viewer.scene.requestRender();
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+/**
+ * Google Earth–style joystick: press anywhere on the disc (the arrows are only markers)
+ * and keep holding; steer by moving the pointer, even mid-drag. `step` gets the push as
+ * x (right) and y (down), shaped so speed grows with the square of the distance from the
+ * centre — fine control near the middle, fast at the edge — plus the frame time.
+ */
+function joystick(el: HTMLElement, step: (x: number, y: number, dt: number) => void, viewer: Viewer): void {
   const knob = el.querySelector<HTMLElement>('.nav-knob')!;
-  let offset: [number, number] | null = null;
-  let timer = 0;
-  const setOffset = (e: PointerEvent) => {
+  const arrows = [...el.querySelectorAll<HTMLElement>('.nav-arrow')];
+  let push: [number, number] | null = null;
+
+  const aim = (e: PointerEvent) => {
     const b = el.getBoundingClientRect();
     const r = b.width / 2;
     let x = (e.clientX - (b.left + r)) / r;
     let y = (e.clientY - (b.top + r)) / r;
     const len = Math.hypot(x, y);
     if (len > 1) [x, y] = [x / len, y / len];
-    offset = [x, y];
-    knob.style.transform = `translate(calc(-50% + ${x * r * 0.55}px), calc(-50% + ${y * r * 0.55}px))`;
+    push = [x, y];
+    knob.style.transform = `translate(calc(-50% + ${x * r * 0.6}px), calc(-50% + ${y * r * 0.6}px))`;
+    // Light the arrow on the side being pushed.
+    const lit = len < DEAD_ZONE ? '' : Math.abs(x) > Math.abs(y) ? (x > 0 ? 'right' : 'left') : y > 0 ? 'down' : 'up';
+    arrows.forEach((a) => a.classList.toggle('lit', a.classList.contains(lit)));
   };
   const release = () => {
-    offset = null;
-    window.clearInterval(timer);
+    push = null;
     el.classList.remove('held');
     knob.style.transform = '';
+    arrows.forEach((a) => a.classList.remove('lit'));
   };
+
   el.addEventListener('pointerdown', (e) => {
-    if ((e.target as HTMLElement).closest('button')) return;
     e.preventDefault();
     e.stopPropagation();
     capture(el, e);
     el.classList.add('held');
-    setOffset(e);
-    timer = window.setInterval(() => {
-      // A small dead zone in the middle, so a plain press doesn't drift.
-      if (!offset || Math.hypot(...offset) < 0.12) return;
-      step(offset[0], offset[1]);
-      viewer.scene.requestRender();
-    }, 40);
+    aim(e);
+    frameLoop(
+      () => push !== null,
+      (dt) => {
+        const [x, y] = push!;
+        const len = Math.hypot(x, y);
+        if (len < DEAD_ZONE) return;
+        // Rescale past the dead zone, then square for the speed curve.
+        const strength = ((len - DEAD_ZONE) / (1 - DEAD_ZONE)) ** 2;
+        step((x / len) * strength, (y / len) * strength, dt);
+      },
+      viewer,
+    );
   });
   el.addEventListener('pointermove', (e) => {
-    if (offset) setOffset(e);
+    if (push) aim(e);
   });
   el.addEventListener('pointerup', release);
   el.addEventListener('pointercancel', release);
@@ -138,12 +178,11 @@ function joystick(el: HTMLElement, step: (x: number, y: number) => void, viewer:
 }
 
 /**
- * Vertical spring-back slider: drag the thumb up or down; while held, `step` runs with
- * the thumb's offset (−1 at the bottom … 1 at the top). Letting go returns it to the middle.
+ * Vertical spring-back slider: hold the thumb above or below the middle to keep zooming;
+ * `step` gets the shaped push (−1 bottom … 1 top) and frame time. It springs back on release.
  */
-function springSlider(track: HTMLElement, thumb: HTMLElement, step: (v: number) => void, viewer: Viewer): void {
+function springSlider(track: HTMLElement, thumb: HTMLElement, step: (v: number, dt: number) => void, viewer: Viewer): void {
   let value: number | null = null;
-  let timer = 0;
   const set = (e: PointerEvent) => {
     const b = track.getBoundingClientRect();
     value = Math.max(-1, Math.min(1, ((b.top + b.height / 2 - e.clientY) / b.height) * 2));
@@ -151,7 +190,6 @@ function springSlider(track: HTMLElement, thumb: HTMLElement, step: (v: number) 
   };
   const release = () => {
     value = null;
-    window.clearInterval(timer);
     track.classList.remove('held');
     thumb.style.transform = '';
   };
@@ -160,12 +198,16 @@ function springSlider(track: HTMLElement, thumb: HTMLElement, step: (v: number) 
     capture(track, e);
     track.classList.add('held');
     set(e);
-    timer = window.setInterval(() => {
-      if (value && Math.abs(value) > 0.08) {
-        step(value);
-        viewer.scene.requestRender();
-      }
-    }, 40);
+    frameLoop(
+      () => value !== null,
+      (dt) => {
+        const v = value!;
+        if (Math.abs(v) < DEAD_ZONE) return;
+        const strength = ((Math.abs(v) - DEAD_ZONE) / (1 - DEAD_ZONE)) ** 2;
+        step(Math.sign(v) * strength, dt);
+      },
+      viewer,
+    );
   });
   track.addEventListener('pointermove', (e) => {
     if (value !== null) set(e);
@@ -224,22 +266,23 @@ export function setupNavControls(viewer: Viewer, keysEnabled: () => boolean, onH
   // then Home and top-down. Both round controls are joysticks: press and drag inside.
   const chevron = (dir: string) =>
     `<svg viewBox="0 0 12 12" class="chev ${dir}"><path d="M3 7.5 6 4.5 9 7.5" /></svg>`;
-  const arrows = (kind: 'look' | 'move') =>
+  // The arrows only show directions: the whole disc is the joystick.
+  const arrows = () =>
     (['up', 'down', 'left', 'right'] as const)
-      .map((d) => `<button class="nav-arrow ${d}" data-${kind}="${d}" aria-label="${kind} ${d}">${chevron(d)}</button>`)
+      .map((d) => `<span class="nav-arrow ${d}" aria-hidden="true">${chevron(d)}</span>`)
       .join('');
   const panel = document.createElement('div');
   panel.id = 'nav-controls';
   panel.innerHTML = `
     <div class="nav-ring" title="Drag the ring to turn · click N to face north (N)">
       <button class="nav-north" aria-label="Face north">N</button>
-      <div class="nav-stick" data-stick="look" title="Look around: press and drag (Shift+arrows)">
-        ${arrows('look')}
+      <div class="nav-stick" data-stick="look" title="Look around: press and hold, then steer">
+        ${arrows()}
         <span class="nav-knob"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12z" /><circle cx="12" cy="12" r="2.6" /></svg></span>
       </div>
     </div>
-    <div class="nav-stick nav-move" data-stick="move" title="Move: press and drag (arrow keys)">
-      ${arrows('move')}
+    <div class="nav-stick nav-move" data-stick="move" title="Move: press and hold, then steer">
+      ${arrows()}
       <span class="nav-knob"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M12 3l-2.5 2.5M12 3l2.5 2.5M12 21l-2.5-2.5M12 21l2.5-2.5M3 12l2.5-2.5M3 12l2.5 2.5M21 12l-2.5-2.5M21 12l-2.5 2.5" /></svg></span>
     </div>
     <div class="nav-zoom">
@@ -302,36 +345,30 @@ export function setupNavControls(viewer: Viewer, keysEnabled: () => boolean, onH
   ring.addEventListener('pointerup', ringUp);
   ring.addEventListener('pointercancel', ringUp);
 
-  // Arrow buttons: hold to repeat.
-  const lookSteps: Record<string, () => void> = {
-    up: () => tilt(CesiumMath.toRadians(1.5), 0),
-    down: () => tilt(-CesiumMath.toRadians(1.5), 0),
-    left: () => turn(-CesiumMath.toRadians(2), 0),
-    right: () => turn(CesiumMath.toRadians(2), 0),
-  };
-  const moveSteps: Record<string, () => void> = {
-    up: () => pan(viewer, 1, 0, 0.03),
-    down: () => pan(viewer, -1, 0, 0.03),
-    left: () => pan(viewer, 0, -1, 0.03),
-    right: () => pan(viewer, 0, 1, 0.03),
-  };
-  panel.querySelectorAll<HTMLElement>('[data-look]').forEach((b) => holdRepeat(b, lookSteps[b.dataset.look!], viewer));
-  panel.querySelectorAll<HTMLElement>('[data-move]').forEach((b) => holdRepeat(b, moveSteps[b.dataset.move!], viewer));
   holdRepeat(panel.querySelector('[data-zoom="in"]')!, () => zoom(viewer, 0.06), viewer);
   holdRepeat(panel.querySelector('[data-zoom="out"]')!, () => zoom(viewer, -0.07), viewer);
 
-  // Joysticks: press anywhere inside and drag; speed grows with distance from the centre.
-  joystick(panel.querySelector('[data-stick="look"]')!, (x, y) => {
-    if (x) turn(CesiumMath.toRadians(3 * x), 0);
-    if (y) tilt(CesiumMath.toRadians(-2 * y), 0);
-  }, viewer);
-  // Up on the stick is forward; the further out, the faster.
-  joystick(panel.querySelector('[data-stick="move"]')!, (x, y) => pan(viewer, -y, x, 0.04), viewer);
+  // Look: turn your head from where the camera is (it stays in place), like Google Earth.
+  joystick(
+    panel.querySelector('[data-stick="look"]')!,
+    (x, y, dt) => {
+      camera.setView({
+        orientation: {
+          heading: camera.heading + LOOK_TURN_RATE * x * dt,
+          pitch: CesiumMath.clamp(camera.pitch - LOOK_TILT_RATE * y * dt, -CesiumMath.PI_OVER_TWO + 0.001, LOOK_MAX_PITCH),
+          roll: 0,
+        },
+      });
+    },
+    viewer,
+  );
+  // Move: glide over the ground; up on the stick is the direction you're facing.
+  joystick(panel.querySelector('[data-stick="move"]')!, (x, y, dt) => pan(viewer, -y, x, MOVE_RATE * dt), viewer);
 
-  // Zoom slider: drag the thumb up to zoom in, down to zoom out; it springs back.
+  // Zoom slider: hold the thumb up to zoom in, down to zoom out; it springs back.
   const track = panel.querySelector<HTMLElement>('.nav-track')!;
   const thumb = panel.querySelector<HTMLElement>('.nav-thumb')!;
-  springSlider(track, thumb, (v) => zoom(viewer, v > 0 ? v * 0.08 : v * 0.09), viewer);
+  springSlider(track, thumb, (v, dt) => zoom(viewer, v * ZOOM_RATE * dt), viewer);
 
   panel.querySelector('.nav-home')!.addEventListener('click', () => onHome());
   panel.querySelector('.nav-tilt')!.addEventListener('click', toggleTopDown);
