@@ -86,6 +86,8 @@ export class Places {
   private readonly source = new CustomDataSource('My places');
   private features: Feature[] = [];
   private readonly list = document.querySelector<HTMLUListElement>('#placemark-list')!;
+  /** Called with a path's name and points when its 📈 button is clicked. */
+  onProfile?: (name: string, positions: Cartesian3[]) => void;
 
   constructor(private readonly viewer: Viewer) {
     viewer.dataSources.add(this.source);
@@ -241,7 +243,15 @@ export class Places {
         this.persist();
         this.render();
       });
-      li.append(visible, icon, name, color, go, remove);
+      li.append(visible, icon, name, color, go);
+      if (f.kind === 'line') {
+        li.append(
+          button('📈', 'Show elevation profile', () =>
+            this.onProfile?.(f.name, f.coords.map(([lon, lat]) => Cartesian3.fromDegrees(lon, lat))),
+          ),
+        );
+      }
+      li.append(remove);
       this.list.append(li);
     }
   }

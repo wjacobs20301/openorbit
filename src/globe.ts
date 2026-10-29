@@ -29,6 +29,9 @@ export function createGlobe(container: string): { viewer: Viewer; layers: LayerE
     animation: false,
     timeline: false,
     fullscreenButton: false,
+    // Our own balloon (balloon.ts) shows feature details instead.
+    infoBox: false,
+    selectionIndicator: false,
     terrainProvider: createTerrainProvider(),
     // Draw frames only when something changes, so an idle globe uses no CPU/GPU.
     // Code that changes the scene outside Cesium's own events calls scene.requestRender().

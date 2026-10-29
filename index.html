@@ -63,6 +63,7 @@
           <div class="tree">
             <div class="tree-folder">📁 My Places</div>
             <ul id="placemark-list" class="list tree-children"></ul>
+            <ul id="kept-list" class="list tree-children"></ul>
             <div class="tree-folder">📁 Temporary Places</div>
             <ul id="import-list" class="list tree-children"></ul>
           </div>
@@ -127,6 +128,14 @@
         <h2>Settings</h2>
         <button aria-label="Close">&times;</button>
       </form>
+      <section>
+        <h3>Start location</h3>
+        <div class="row">
+          <button id="make-start" type="button">Make this view my start location</button>
+          <button id="clear-start" type="button">Use the last view instead</button>
+        </div>
+        <p class="hint">OpenOrbit opens at the start location if set, otherwise where you left off. Home goes to the start location.</p>
+      </section>
       <section>
         <h3>Street photos</h3>
         <label class="field">Mapillary access token

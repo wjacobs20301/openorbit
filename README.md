@@ -19,7 +19,11 @@ Google Earth Pro. It reads public map data directly, so the project runs no serv
 - Placemarks, paths and polygons with colours, live length/area, saved between
   sessions and exported as styled KML
 - Import KML/KMZ, GeoJSON, GPX, CSV (latitude/longitude columns) and shapefiles
-  (zipped, or .shp with its .dbf/.prj), with no vertex limit
+  (zipped, or .shp with its .dbf/.prj), with no vertex limit; flat KML is draped on the terrain, the
+  file's folders show as a tree with checkboxes, and **Keep** saves a file in My Places
+- Click any feature for a details balloon (including KML ExtendedData/SchemaData)
+- Elevation profile for paths and lines (distance, elevation range, climb, steepest grade)
+- Opens where you left off, or at a start location you set; scale legend
 - Distance measuring
 - Street-level photos: Panoramax (no key), Mapillary (optional token), and a one-click
   "Open in Google Street View" button

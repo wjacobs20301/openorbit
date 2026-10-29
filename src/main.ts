@@ -1,9 +1,13 @@
 import {
   EllipsoidTerrainProvider,
+  JulianDate,
+  type Cartesian3,
+  type Entity,
   Math as CesiumMath,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
 } from 'cesium';
+import { Balloon } from './balloon';
 import { Buildings } from './buildings';
 import { Drawer } from './draw';
 import './style.css';
@@ -20,8 +24,11 @@ import { setupOffline } from './offline';
 import { addVectorOverlays } from './overlay';
 import { Pegman } from './pegman';
 import { Places } from './places';
+import { ElevationProfile } from './profile';
 import { clearTileCache, isDesktop, isTyping, loadSetting, storeSetting } from './platform';
 import { setupSearch } from './search';
+import { setupScaleLegend } from './scale';
+import { setupStartView } from './startview';
 import { StreetView } from './streetview';
 import { setupSun, type SunControl } from './sun';
 import { createTerrainProvider } from './terrain';
@@ -37,6 +44,8 @@ let syncMenu: (() => void) | undefined;
 
 const app = document.querySelector<HTMLElement>('#app')!;
 const { viewer, layers } = createGlobe('globe');
+const startView = setupStartView(viewer);
+const scaleLegend = setupScaleLegend(viewer);
 
 // The globe redraws only on request. Redraw after any UI interaction and whenever
 // entities or data sources change; modules with their own async work request too.
@@ -62,6 +71,14 @@ const places = new Places(viewer);
 const hint = document.querySelector<HTMLElement>('#tool-hint')!;
 const measure = new Measure(viewer, (summary) => (hint.textContent = summary));
 const street = new StreetView(viewer);
+const balloon = new Balloon(viewer);
+const profile = new ElevationProfile(viewer);
+const showLineProfile = (entity: Entity) => {
+  const positions = entity.polyline?.positions?.getValue(JulianDate.now()) as Cartesian3[] | undefined;
+  if (positions?.length) void profile.show(entity.name ?? 'Line', positions);
+};
+balloon.onProfile = showLineProfile;
+places.onProfile = (name, positions) => void profile.show(name, positions);
 const drawer = new Drawer(
   viewer,
   (summary) => (hint.textContent = summary),
@@ -105,7 +122,10 @@ function setTool(next: Tool): void {
 }
 toolButtons.forEach((b) => b.addEventListener('click', () => setTool(b.dataset.tool as Tool)));
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') setTool(null);
+  if (e.key === 'Escape') {
+    setTool(null);
+    balloon.close();
+  }
   // Leave typing in sidebar fields alone.
   if (!drawer.kind || isTyping(e)) return;
   if (e.key === 'Enter') drawer.finish();
@@ -120,7 +140,11 @@ viewer.cesiumWidget.screenSpaceEventHandler.removeInputAction(ScreenSpaceEventTy
 
 const handler = new ScreenSpaceEventHandler(viewer.scene.canvas);
 handler.setInputAction(({ position }: ScreenSpaceEventHandler.PositionedEvent) => {
-  if (!tool) return;
+  // With no tool active, a click shows the details of whatever feature is under it.
+  if (!tool) {
+    balloon.openAt(position);
+    return;
+  }
   const ground = pickGround(viewer, position);
   if (!ground) return;
   if (tool === 'placemark') places.addPoint(ground);
@@ -308,6 +332,13 @@ const toggles: AppActions['toggles'] = {
   sidebar: { get: () => !app.classList.contains('no-sidebar'), set: (on) => setPanelShown('no-sidebar', on) },
   statusBar: { get: () => !app.classList.contains('no-status'), set: (on) => setPanelShown('no-status', on) },
   navigation: { get: () => !app.classList.contains('no-nav'), set: (on) => setPanelShown('no-nav', on) },
+  scaleLegend: {
+    get: () => scaleLegend.shown,
+    set: (on) => {
+      scaleLegend.setShown(on);
+      syncViewState();
+    },
+  },
   atmosphere: { get: () => viewer.scene.globe.showGroundAtmosphere, set: setAtmosphere },
   sun: { get: () => sunCtl.open, set: (on) => sunCtl.setOpen(on) },
   history: { get: () => historyCtl.open, set: (on) => historyCtl.setOpen(on) },
@@ -320,6 +351,15 @@ const actions: AppActions = {
   saveImage: () => void saveImage(viewer),
   googleMaps: () => void openInGoogleMaps(viewer),
   googleEarthWeb: () => void openInGoogleEarthWeb(viewer),
+  makeStartLocation: () => {
+    startView.makeStart();
+    hint.textContent = 'This view is now your start location (and the Home button goes here).';
+  },
+  elevationProfile: () => {
+    const selected = balloon.selected;
+    if (selected?.polyline) showLineProfile(selected);
+    else hint.textContent = 'Click a path or line first, then choose Show Elevation Profile.';
+  },
   copyViewLocation: () => {
     const text = viewLocation(viewer);
     navigator.clipboard.writeText(text).then(
@@ -398,6 +438,15 @@ tokenInput.addEventListener('change', () => storeSetting('mapillaryToken', token
 const googleKeyInput = document.querySelector<HTMLInputElement>('#google-key')!;
 googleKeyInput.value = loadSetting('googleKey');
 googleKeyInput.addEventListener('change', () => storeSetting('googleKey', googleKeyInput.value.trim()));
+
+document.querySelector('#make-start')!.addEventListener('click', () => {
+  settingsDialog.close();
+  actions.makeStartLocation();
+});
+document.querySelector('#clear-start')!.addEventListener('click', () => {
+  startView.clearStart();
+  hint.textContent = 'OpenOrbit will open where you left off.';
+});
 
 const clearButton = document.querySelector<HTMLButtonElement>('#clear-cache')!;
 clearButton.addEventListener('click', async () => {

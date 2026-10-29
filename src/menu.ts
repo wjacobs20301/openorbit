@@ -8,6 +8,8 @@ export interface AppActions {
   googleMaps(): void;
   googleEarthWeb(): void;
   copyViewLocation(): void;
+  elevationProfile(): void;
+  makeStartLocation(): void;
   find(): void;
   settings(): void;
   shortcuts(): void;
@@ -23,7 +25,15 @@ export interface AppActions {
   toggles: Record<ToggleId, { get(): boolean; set(on: boolean): void }>;
 }
 
-export type ToggleId = 'toolbar' | 'sidebar' | 'statusBar' | 'navigation' | 'atmosphere' | 'sun' | 'history';
+export type ToggleId =
+  | 'toolbar'
+  | 'sidebar'
+  | 'statusBar'
+  | 'navigation'
+  | 'scaleLegend'
+  | 'atmosphere'
+  | 'sun'
+  | 'history';
 
 /**
  * Native menu bar for the desktop app, laid out like Google Earth Pro's. Returns a
@@ -93,6 +103,7 @@ export async function setupMenu(a: AppActions): Promise<() => void> {
       await PredefinedMenuItem.new({ item: 'SelectAll' }),
       await separator(),
       await item('Copy View Location', a.copyViewLocation, 'Shift+CmdOrCtrl+C'),
+      await item('Show Elevation Profile', a.elevationProfile),
       await item('Find', a.find, 'CmdOrCtrl+F'),
     ],
   });
@@ -113,12 +124,14 @@ export async function setupMenu(a: AppActions): Promise<() => void> {
       await check('sidebar', 'Sidebar', 'Alt+CmdOrCtrl+B'),
       await check('statusBar', 'Status Bar'),
       await check('navigation', 'Show Navigation'),
+      await check('scaleLegend', 'Scale Legend'),
       await separator(),
       await check('atmosphere', 'Atmosphere'),
       await check('sun', 'Sun'),
       await check('history', 'Historical Imagery'),
       await separator(),
       reset,
+      await item('Make This My Start Location', a.makeStartLocation),
       await separator(),
       await PredefinedMenuItem.new({ item: 'Fullscreen' }),
     ],
