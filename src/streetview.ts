@@ -21,6 +21,9 @@ interface PanoramaxItem {
 const PHOTO_TIMEOUT = 20_000;
 /** The full-size upgrade can take longer; it only replaces the photo if it arrives. */
 const HD_TIMEOUT = 120_000;
+/** Search half-widths in degrees for Mapillary: right at the click, and wider as a fallback. */
+const MAPILLARY_NEAR = 0.0005;
+const MAPILLARY_WIDE = 0.002;
 
 /** Downloads an image within `ms`, returning an object URL (the caller revokes it). */
 async function fetchImage(url: string, ms: number): Promise<string> {
@@ -95,8 +98,7 @@ export class StreetView {
     this.prev.hidden = this.next.hidden = true;
   }
 
-  private async tryMapillary(token: string, lon: number, lat: number): Promise<boolean> {
-    const d = 0.0005;
+  private async tryMapillary(token: string, lon: number, lat: number, d = MAPILLARY_NEAR): Promise<boolean> {
     const url =
       `${streetSources.mapillaryGraph}/images?access_token=${encodeURIComponent(token)}` +
       `&fields=id,computed_geometry,geometry&limit=50&bbox=${lon - d},${lat - d},${lon + d},${lat + d}`;
@@ -180,10 +182,7 @@ export class StreetView {
     try {
       src = await fetchImage(first, PHOTO_TIMEOUT);
     } catch {
-      if (id !== this.loadId) return;
-      this.showMessage("The photo server isn't responding. Try again later, or open this spot in Google.", () =>
-        void this.showPanoramax(item),
-      );
+      if (id === this.loadId) await this.photoFailed(item);
       return;
     }
     if (id !== this.loadId) return URL.revokeObjectURL(src);
@@ -210,6 +209,20 @@ export class StreetView {
       img.alt = 'Street-level photo';
       this.container.replaceChildren(img);
     }
+  }
+
+  /** A Panoramax photo didn't load: try Mapillary around the same spot, or explain what to do. */
+  private async photoFailed(item: PanoramaxItem): Promise<void> {
+    const [lon, lat] = item.geometry.coordinates;
+    const token = loadSetting('mapillaryToken');
+    if (token) {
+      this.showMessage("Panoramax isn't responding. Trying Mapillary…");
+      if (await this.tryMapillary(token, lon, lat, MAPILLARY_WIDE)) return;
+    }
+    const advice = token
+      ? "The photo server isn't responding, and Mapillary found nothing nearby (or the token in Settings isn't valid). Try again later, or open this spot in Google."
+      : "The photo server isn't responding. Add a Mapillary token in Settings to see other photos here, or open this spot in Google.";
+    this.showMessage(advice, () => void this.showPanoramax(item));
   }
 
   private async showSphere(src: string): Promise<void> {
