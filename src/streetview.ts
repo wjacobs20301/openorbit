@@ -1,6 +1,7 @@
 import type { Viewer as SphereViewer } from '@photo-sphere-viewer/core';
 import { Cartesian3, Color, type Entity, type Viewer } from 'cesium';
 import type { Viewer as MapillaryViewer } from 'mapillary-js';
+import { photosNear, type PhotoSpot } from './photomap';
 import { isTyping, loadSetting, openExternal } from './platform';
 import { streetSources } from './sources';
 
@@ -39,8 +40,9 @@ const MAPILLARY_WIDE = 0.002;
 const CAMERA_HEIGHT = 2.5;
 const MIN_STEP = 4;
 const MAX_STEP = 60;
-/** Distance used when clicking at or above the horizon. */
-const DEFAULT_STEP = 20;
+/** How close (metres, or this share of the distance) a photo must be to where you point. */
+const MATCH_RADIUS = 6;
+const MATCH_SHARE = 0.35;
 /** Field of view assumed for flat photos that don't record one. */
 const FLAT_FOV = 70;
 /** Metres a photo from another capture trip must be closer by to be chosen over the current trip. */
@@ -69,6 +71,11 @@ export class StreetView {
   private readonly prev = document.querySelector<HTMLButtonElement>('#street-prev')!;
   private readonly next = document.querySelector<HTMLButtonElement>('#street-next')!;
   private readonly stage = document.querySelector<HTMLElement>('#street-stage')!;
+  /** Ground cursor showing where a click would move to, and whether there's a photo there. */
+  private readonly puck = document.createElement('div');
+  /** Positions of photos around the current one, or null while they're loading. */
+  private nearby: PhotoSpot[] | null = null;
+  private dragging = false;
 
   private sphere?: SphereViewer;
   private mapillary?: MapillaryViewer;
@@ -93,6 +100,21 @@ export class StreetView {
       expand.textContent = on ? 'Shrink' : 'Expand';
     };
     expand.addEventListener('click', toggleExpand);
+
+    this.puck.className = 'street-puck';
+    this.puck.hidden = true;
+    this.stage.append(this.puck);
+    let frame = 0;
+    this.container.addEventListener('mousemove', (e) => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => this.updatePuck(e));
+    });
+    this.container.addEventListener('mouseleave', () => (this.puck.hidden = true));
+    this.container.addEventListener('mousedown', () => {
+      this.dragging = true;
+      this.puck.hidden = true;
+    });
+    window.addEventListener('mouseup', () => (this.dragging = false));
 
     // Keyboard while the viewer is open: ↑/W forward, ↓/S back, F expand. Left/right
     // turn the 360° view (handled by the photo viewer itself).
@@ -222,48 +244,105 @@ export class StreetView {
     return { heading: azimuth(this.item) + yaw * DEG, pitch, zoom: this.sphere.getZoomLevel() };
   }
 
+  /** Where on the ground a view direction points, in metres, or null at/above the horizon. */
+  private groundDistance(pitch: number): number | null {
+    if (pitch >= -0.03) return null;
+    return Math.min(MAX_STEP, Math.max(MIN_STEP, CAMERA_HEIGHT / Math.tan(-pitch)));
+  }
+
   /**
-   * Click-to-move: a click below the horizon is turned into a distance along the ground
-   * (from the camera height), and the nearest photo around that spot is shown, keeping
-   * the current viewing direction.
+   * The photo a click in this direction would move to: the one nearest the pointed-at
+   * spot on the ground, preferring the current capture trip. Undefined while nearby
+   * photos are still loading; null when there's nothing there.
    */
-  private async moveToward(heading: number, pitch: number): Promise<void> {
-    if (!this.item) return;
-    const distance =
-      pitch < -0.03 ? Math.min(MAX_STEP, Math.max(MIN_STEP, CAMERA_HEIGHT / Math.tan(-pitch))) : DEFAULT_STEP;
+  private destination(heading: number, pitch: number): { spot: PhotoSpot | null; distance: number } | undefined | null {
+    const distance = this.groundDistance(pitch);
+    if (distance === null || !this.item) return null;
+    if (!this.nearby) return undefined;
     const [lon, lat] = this.position;
+    const kx = 111_320 * Math.cos(lat / DEG);
     const rad = heading / DEG;
-    const target: [number, number] = [
-      lon + (distance * Math.sin(rad)) / (111_320 * Math.cos(lat / DEG)),
-      lat + (distance * Math.cos(rad)) / 111_320,
-    ];
+    const target: [number, number] = [lon + (distance * Math.sin(rad)) / kx, lat + (distance * Math.cos(rad)) / 111_320];
+    const metres = (s: PhotoSpot, p: [number, number]) => Math.hypot((s.lon - p[0]) * kx, (s.lat - p[1]) * 111_320);
+    const reach = Math.max(MATCH_RADIUS, distance * MATCH_SHARE);
+    let best: PhotoSpot | null = null;
+    let bestScore = Infinity;
+    for (const spot of this.nearby) {
+      if (spot.id === this.item.id || metres(spot, this.position) < 2) continue;
+      const off = metres(spot, target);
+      if (off > reach) continue;
+      const score = off + (spot.sequence === this.item.collection ? 0 : OTHER_TRIP_PENALTY);
+      if (score < bestScore) [best, bestScore] = [spot, score];
+    }
+    return { spot: best, distance };
+  }
+
+  /** Click-to-move: go to the photo the ground cursor is pointing at, keeping the view direction. */
+  private async moveToward(heading: number, pitch: number): Promise<void> {
+    const dest = this.destination(heading, pitch);
+    if (dest === null) return;
+    if (dest === undefined) return this.flash('Still finding nearby photos…');
+    if (!dest.spot) return this.flash('No photo there');
     const look = this.currentLook();
-    const currentId = this.item.id;
     this.setLoading(true);
     try {
-      const url = `${streetSources.panoramaxSearch}?place_position=${target[0]},${target[1]}&place_distance=0-30&limit=10`;
-      const { features } = (await (await fetch(url, { signal: AbortSignal.timeout(PHOTO_TIMEOUT) })).json()) as {
-        features: PanoramaxItem[];
-      };
-      const metres = (c: [number, number], d: [number, number]) =>
-        Math.hypot((c[0] - d[0]) * 111_320 * Math.cos(lat / DEG), (c[1] - d[1]) * 111_320);
-      // Nearest photo to the clicked spot that isn't (practically) where we already are,
-      // preferring the same capture trip so lighting and date don't jump around.
-      const collection = this.item.collection;
-      const score = (f: PanoramaxItem) =>
-        metres(f.geometry.coordinates, target) + (f.collection === collection ? 0 : OTHER_TRIP_PENALTY);
-      const best = features
-        .filter((f) => f.id !== currentId && metres(f.geometry.coordinates, this.position) > 2)
-        .sort((a, b) => score(a) - score(b))[0];
-      if (best) {
-        await this.showPanoramax(best, look);
-        return;
-      }
-      this.flash('No photo there. Try clicking further along the road.');
+      const url = `${streetSources.panoramaxApi}/collections/${dest.spot.sequence}/items/${dest.spot.id}`;
+      const item = (await (await fetch(url, { signal: AbortSignal.timeout(PHOTO_TIMEOUT) })).json()) as PanoramaxItem;
+      await this.showPanoramax(item, look);
     } catch {
+      this.setLoading(false);
       this.flash("Couldn't reach Panoramax.");
     }
-    this.setLoading(false);
+  }
+
+  /** The compass heading and pitch under the mouse, for 360° and flat photos. */
+  private pointedAt(e: MouseEvent): { heading: number; pitch: number } | null {
+    if (!this.item) return null;
+    if (this.sphere) {
+      const box = this.container.getBoundingClientRect();
+      const { yaw, pitch } = this.sphere.dataHelper.viewerCoordsToSphericalCoords({
+        x: e.clientX - box.left,
+        y: e.clientY - box.top,
+      });
+      return { heading: azimuth(this.item) + yaw * DEG, pitch };
+    }
+    const img = this.container.querySelector('img');
+    if (!img || !img.naturalWidth) return null;
+    const box = img.getBoundingClientRect();
+    // The image is letterboxed (object-fit: contain); find the drawn area.
+    const scale = Math.min(box.width / img.naturalWidth, box.height / img.naturalHeight);
+    const [w, h] = [img.naturalWidth * scale, img.naturalHeight * scale];
+    const fx = (e.clientX - box.left - (box.width - w) / 2) / w;
+    const fy = (e.clientY - box.top - (box.height - h) / 2) / h;
+    if (fx < 0 || fx > 1 || fy < 0 || fy > 1) return null;
+    const fov = this.item.properties['pers:interior_orientation']?.field_of_view ?? FLAT_FOV;
+    return { heading: azimuth(this.item) + (fx - 0.5) * fov, pitch: (-(fy - 0.5) * ((fov * h) / w)) / DEG };
+  }
+
+  /**
+   * Draws the ground cursor like Google Street View's: an ellipse lying on the road,
+   * smaller further away, solid when there's a photo to move to and crossed out when not.
+   */
+  private updatePuck(e: MouseEvent): void {
+    const at = this.dragging ? null : this.pointedAt(e);
+    const dest = at && this.destination(at.heading, at.pitch);
+    if (!at || dest === null) {
+      this.puck.hidden = true;
+      this.container.style.cursor = '';
+      return;
+    }
+    const box = this.stage.getBoundingClientRect();
+    const distance = dest ? dest.distance : (this.groundDistance(at.pitch) ?? MAX_STEP);
+    const size = Math.max(24, Math.min(110, 220 / Math.sqrt(distance)));
+    const flatten = Math.max(0.28, Math.min(0.9, Math.sin(-at.pitch) * 2.2));
+    this.puck.hidden = false;
+    this.puck.dataset.state = dest === undefined ? 'pending' : dest.spot ? 'ok' : 'none';
+    this.puck.title = '';
+    this.puck.style.width = this.puck.style.height = `${size}px`;
+    this.puck.style.left = `${e.clientX - box.left}px`;
+    this.puck.style.top = `${e.clientY - box.top}px`;
+    this.puck.style.transform = `translate(-50%, -50%) scaleY(${flatten})`;
+    this.container.style.cursor = dest && dest.spot ? 'pointer' : dest ? 'not-allowed' : '';
   }
 
   /** Shows a short note over the photo for a few seconds. */
@@ -284,6 +363,11 @@ export class StreetView {
     const [lon, lat] = item.geometry.coordinates;
     this.position = [lon, lat];
     const spherical = is360(item);
+    // Positions (not images) of photos around this one, for the ground cursor.
+    this.nearby = null;
+    void photosNear(lon, lat, MAX_STEP * (1 + MATCH_SHARE)).then((spots) => {
+      if (this.item === item) this.nearby = spots;
+    });
     const date = item.properties.datetime ? new Date(item.properties.datetime).toLocaleDateString() : '';
     // Say whether it's a 360° photo: flat ones can't be turned.
     this.title.textContent = `Panoramax${date ? ` · ${date}` : ''} · ${
@@ -343,25 +427,14 @@ export class StreetView {
       const img = document.createElement('img');
       img.src = src;
       img.alt = 'Street-level photo';
-      img.addEventListener('click', (e) => this.flatClick(img, e, item));
+      img.addEventListener('click', (e) => {
+        const at = this.pointedAt(e);
+        if (at) void this.moveToward(at.heading, at.pitch);
+      });
       this.container.replaceChildren(img);
     }
     previous.forEach((u) => URL.revokeObjectURL(u));
     this.setLoading(false);
-  }
-
-  /** Click-to-move on a flat photo: estimate the direction from where in the frame it was clicked. */
-  private flatClick(img: HTMLImageElement, e: MouseEvent, item: PanoramaxItem): void {
-    const box = img.getBoundingClientRect();
-    // The image is letterboxed (object-fit: contain); find the drawn area.
-    const scale = Math.min(box.width / img.naturalWidth, box.height / img.naturalHeight);
-    const [w, h] = [img.naturalWidth * scale, img.naturalHeight * scale];
-    const fx = (e.clientX - box.left - (box.width - w) / 2) / w;
-    const fy = (e.clientY - box.top - (box.height - h) / 2) / h;
-    if (fx < 0 || fx > 1 || fy < 0 || fy > 1) return;
-    const fov = item.properties['pers:interior_orientation']?.field_of_view ?? FLAT_FOV;
-    const verticalFov = (fov * h) / w;
-    void this.moveToward(azimuth(item) + (fx - 0.5) * fov, (-(fy - 0.5) * verticalFov) / DEG);
   }
 
   /** A Panoramax photo didn't load: try Mapillary around the same spot, or explain what to do. */

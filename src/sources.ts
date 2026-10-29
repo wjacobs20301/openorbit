@@ -170,5 +170,8 @@ export const geocoder = {
 
 export const streetSources = {
   panoramaxSearch: 'https://api.panoramax.xyz/api/search',
+  panoramaxApi: 'https://api.panoramax.xyz/api',
+  /** Vector tiles of photo positions only (no images); zoom 15 is the most detailed. */
+  panoramaxTiles: 'https://api.panoramax.xyz/api/map/{z}/{x}/{y}.mvt',
   mapillaryGraph: 'https://graph.mapillary.com',
 };
