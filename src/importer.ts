@@ -1,5 +1,11 @@
 import {
+  ArcType,
+  Cartographic,
+  type Cartesian3,
+  type Entity,
   Color,
+  HeightReference,
+  JulianDate,
   GeoJsonDataSource,
   GpxDataSource,
   KmlDataSource,
@@ -74,6 +80,51 @@ function parseCsv(text: string): string[][] {
   return rows;
 }
 
+/**
+ * Drapes flat KML geometry on the terrain, as Google Earth does. Cesium only clamps KML
+ * lines that have <tessellate>; others (common in exported files) are drawn at sea level
+ * and vanish under hills. Anything with real heights in its coordinates keeps them.
+ */
+function dropToGround(source: DataSource): void {
+  const now = JulianDate.now();
+  const outlines: Entity.ConstructorOptions[] = [];
+  const flat = (positions: Cartesian3[] | undefined) =>
+    !!positions?.length && positions.every((p) => Math.abs(Cartographic.fromCartesian(p)?.height ?? 0) < 1);
+  for (const entity of source.entities.values) {
+    const line = entity.polyline;
+    if (line && !line.clampToGround?.getValue(now) && flat(line.positions?.getValue(now))) {
+      line.clampToGround = true as never;
+      line.arcType = ArcType.GEODESIC as never;
+    }
+    const polygon = entity.polygon;
+    if (polygon?.perPositionHeight?.getValue(now) && flat(polygon.hierarchy?.getValue(now)?.positions)) {
+      polygon.perPositionHeight = false as never;
+    }
+    // Outlines can't be drawn on terrain, so draw a draped border line instead.
+    const ring = polygon?.hierarchy?.getValue(now)?.positions as Cartesian3[] | undefined;
+    if (polygon && !polygon.perPositionHeight?.getValue(now) && polygon.outline?.getValue(now) && ring?.length) {
+      polygon.outline = false as never;
+      outlines.push({
+        parent: entity,
+        polyline: {
+          positions: [...ring, ring[0]],
+          clampToGround: true,
+          arcType: ArcType.GEODESIC,
+          width: Math.max(1.5, polygon.outlineWidth?.getValue(now) ?? 2),
+          material: polygon.outlineColor?.getValue(now) ?? Color.WHITE,
+        },
+      });
+    }
+    const position = entity.position?.getValue(now);
+    if (position && flat([position])) {
+      if (entity.billboard) entity.billboard.heightReference = HeightReference.CLAMP_TO_GROUND as never;
+      if (entity.point) entity.point.heightReference = HeightReference.CLAMP_TO_GROUND as never;
+      if (entity.label) entity.label.heightReference = HeightReference.CLAMP_TO_GROUND as never;
+    }
+  }
+  outlines.forEach((o) => source.entities.add(o));
+}
+
 const ext = (f: File) => f.name.toLowerCase().split('.').pop() ?? '';
 const base = (f: File) => f.name.replace(/\.[^.]+$/, '');
 
@@ -89,6 +140,7 @@ async function load(files: File[], viewer: Viewer): Promise<Imported[]> {
     const kind = ext(file);
     if (kind === 'kml' || kind === 'kmz') {
       const source = await KmlDataSource.load(file, { camera: viewer.scene.camera, canvas: viewer.scene.canvas, clampToGround: true });
+      dropToGround(source);
       out.push({ source, name: source.name || file.name });
     } else if (kind === 'geojson' || kind === 'json') {
       out.push(await geoJson(JSON.parse(await file.text()), file.name));
