@@ -23,6 +23,10 @@ export class Balloon {
   private entity?: Entity;
   /** Called with a line feature when "Show elevation profile" is clicked. */
   onProfile?: (entity: Entity) => void;
+  /** Called for "Edit" on features the user can edit (their own places). */
+  onEdit?: (entity: Entity) => void;
+  canEdit?: (entity: Entity) => boolean;
+  private readonly editLink = document.createElement('button');
 
   constructor(private readonly viewer: Viewer) {
     this.el.className = 'balloon';
@@ -40,7 +44,14 @@ export class Balloon {
     this.profileLink.className = 'link';
     this.profileLink.textContent = '📈 Show elevation profile';
     this.profileLink.addEventListener('click', () => this.entity && this.onProfile?.(this.entity));
-    this.el.append(head, this.frame, this.profileLink);
+    this.editLink.className = 'link';
+    this.editLink.textContent = '✎ Edit';
+    this.editLink.addEventListener('click', () => {
+      const entity = this.entity;
+      this.close();
+      if (entity) this.onEdit?.(entity);
+    });
+    this.el.append(head, this.frame, this.profileLink, this.editLink);
     viewer.container.append(this.el);
     viewer.scene.postRender.addEventListener(() => this.place());
   }
@@ -68,6 +79,7 @@ export class Balloon {
     const description = (typeof raw === 'string' ? raw : raw?.getValue?.(JulianDate.now())) ?? '';
     this.frame.hidden = !description;
     this.profileLink.hidden = !entity.polyline || !this.onProfile;
+    this.editLink.hidden = !this.canEdit?.(entity);
     this.frame.srcdoc = `<!doctype html><meta charset="utf-8"><base target="_blank"><style>${BALLOON_CSS}</style>${description}`;
     this.frame.onload = () => {
       const body = this.frame.contentDocument?.body;

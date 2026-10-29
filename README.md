@@ -22,6 +22,10 @@ Google Earth Pro. It reads public map data directly, so the project runs no serv
   (zipped, or .shp with its .dbf/.prj), with no vertex limit; flat KML is draped on the terrain, the
   file's folders show as a tree with checkboxes, and **Keep** saves a file in My Places
 - Click any feature for a details balloon (including KML ExtendedData/SchemaData)
+- Edit places like Google Earth's Properties window: name, description, colour, line
+  width, fill opacity, folder; drag placemarks and corner handles to reshape, drag a
+  midpoint to add a corner, double-click a corner to remove it; folders in My Places
+  with drag and drop; Cancel undoes (or deletes a just-created place)
 - Elevation profile for paths and lines (distance, elevation range, climb, steepest grade)
 - Opens where you left off, or at a start location you set; scale legend
 - Distance measuring

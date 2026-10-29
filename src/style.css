@@ -361,6 +361,34 @@ input[type='range'] { padding: 0; accent-color: var(--accent); }
 .balloon-head button { border: 0; background: none; color: #5f6b7a; font-size: 18px; line-height: 1; padding: 0 2px; }
 .balloon iframe { display: block; width: 100%; border: 0; height: 0; }
 
+/* ---- Properties (edit) window */
+#edit-panel {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 4;
+  width: 300px;
+  max-height: calc(100% - 60px);
+  overflow-y: auto;
+  padding: 10px 14px 12px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.35);
+}
+#edit-panel[hidden] { display: none; }
+#edit-panel h3 { margin: 0 0 10px; font-size: 14px; }
+#edit-panel .field { flex: 1; margin-bottom: 8px; }
+#edit-panel input:not([type='color']):not([type='range']), #edit-panel select, #edit-panel textarea { width: 100%; }
+#edit-panel textarea { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--border); border-radius: 5px; padding: 4px 8px; resize: vertical; }
+#edit-panel input[type='color'] { width: 44px; height: 28px; padding: 2px; }
+button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+
+.twisty { border: 0 !important; background: none !important; padding: 0 2px !important; width: 16px; color: var(--muted); }
+.drop-here { outline: 2px dashed var(--accent); outline-offset: 2px; border-radius: 4px; }
+#placemark-list li[draggable='true'] { cursor: grab; }
+
 /* ---- Elevation profile */
 #profile-panel {
   position: absolute;

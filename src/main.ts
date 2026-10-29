@@ -25,6 +25,7 @@ import { addVectorOverlays } from './overlay';
 import { Pegman } from './pegman';
 import { Places } from './places';
 import { ElevationProfile } from './profile';
+import { PlaceEditor } from './editor';
 import { clearTileCache, isDesktop, isTyping, loadSetting, storeSetting } from './platform';
 import { setupSearch } from './search';
 import { setupScaleLegend } from './scale';
@@ -78,13 +79,19 @@ const showLineProfile = (entity: Entity) => {
   if (positions?.length) void profile.show(entity.name ?? 'Line', positions);
 };
 balloon.onProfile = showLineProfile;
+balloon.canEdit = (entity) => !!places.get(entity.id);
+balloon.onEdit = (entity) => editor.open(entity.id);
 places.onProfile = (name, positions) => void profile.show(name, positions);
+const editor = new PlaceEditor(viewer, places);
+places.onEdit = (id) => editor.open(id);
 const drawer = new Drawer(
   viewer,
   (summary) => (hint.textContent = summary),
   (kind, coords) => {
-    places.addShape(kind, coords);
+    // As in Google Earth, a new place opens its Properties window.
+    const id = places.addShape(kind, coords);
     setTool(null);
+    editor.open(id, true);
   },
 );
 setupSearch(viewer, () => (google3d.active ? loadSetting('googleKey') : null));
@@ -125,6 +132,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     setTool(null);
     balloon.close();
+    if (editor.active && !isTyping(e)) editor.close(false);
   }
   // Leave typing in sidebar fields alone.
   if (!drawer.kind || isTyping(e)) return;
@@ -142,12 +150,18 @@ const handler = new ScreenSpaceEventHandler(viewer.scene.canvas);
 handler.setInputAction(({ position }: ScreenSpaceEventHandler.PositionedEvent) => {
   // With no tool active, a click shows the details of whatever feature is under it.
   if (!tool) {
-    balloon.openAt(position);
+    // While editing, clicks go to the editor's handles instead.
+    if (!editor.active) balloon.openAt(position);
     return;
   }
   const ground = pickGround(viewer, position);
   if (!ground) return;
-  if (tool === 'placemark') places.addPoint(ground);
+  if (tool === 'placemark') {
+    const id = places.addPoint(ground);
+    setTool(null);
+    editor.open(id, true);
+    return;
+  }
   if (tool === 'path' || tool === 'polygon') drawer.add(ground);
   if (tool === 'measure') measure.add(ground);
   if (tool === 'street') {

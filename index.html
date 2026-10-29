@@ -61,7 +61,7 @@
         <details class="panel grow" data-panel="places" open>
           <summary>Places</summary>
           <div class="tree">
-            <div class="tree-folder">📁 My Places</div>
+            <div id="my-places-root" class="tree-folder" title="Drop places here to take them out of a folder">📁 My Places</div>
             <ul id="placemark-list" class="list tree-children"></ul>
             <ul id="kept-list" class="list tree-children"></ul>
             <div class="tree-folder">📁 Temporary Places</div>
@@ -72,6 +72,7 @@
             <label class="button" title="KML, KMZ, GeoJSON, GPX, CSV, zipped shapefile, or .shp with its .dbf"
               >Open…<input id="import-input" type="file" multiple hidden
             /></label>
+            <button id="new-folder" title="Add a folder to My Places">New Folder</button>
             <button id="kml-export" title="Save My Places as a KML file (⌘S)">Save as KML…</button>
           </div>
         </details>
