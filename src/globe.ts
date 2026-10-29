@@ -29,6 +29,8 @@ export function createGlobe(container: string): { viewer: Viewer; layers: LayerE
     animation: false,
     timeline: false,
     fullscreenButton: false,
+    // Home lives in our navigation controls (navcontrols.ts).
+    homeButton: false,
     // Our own balloon (balloon.ts) shows feature details instead.
     infoBox: false,
     selectionIndicator: false,

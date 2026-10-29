@@ -96,7 +96,7 @@ const drawer = new Drawer(
 );
 setupSearch(viewer, () => (google3d.active ? loadSetting('googleKey') : null));
 // Street view owns the arrow keys while it's open.
-const nav = setupNavControls(viewer, () => !street.isOpen);
+const nav = setupNavControls(viewer, () => !street.isOpen, () => startView.goHome());
 const pegman = new Pegman(viewer, street);
 pegman.onTap = () => setTool('street');
 setupImport(viewer);

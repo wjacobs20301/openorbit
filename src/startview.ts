@@ -42,7 +42,7 @@ function goTo(viewer: Viewer, v: SavedView, duration?: number): void {
  * location), otherwise wherever it was last left. The Home button goes to the start
  * location, or the whole Earth when none is set.
  */
-export function setupStartView(viewer: Viewer): { makeStart(): void; clearStart(): void } {
+export function setupStartView(viewer: Viewer): { makeStart(): void; clearStart(): void; goHome(): void } {
   const start = read('startView');
   const last = read('lastView');
   if (start ?? last) goTo(viewer, (start ?? last)!, 0);
@@ -56,12 +56,6 @@ export function setupStartView(viewer: Viewer): { makeStart(): void; clearStart(
   // Also on close, in case the last move didn't finish with a moveEnd.
   window.addEventListener('pagehide', () => storeSetting('lastView', JSON.stringify(current(viewer))));
 
-  viewer.homeButton.viewModel.command.beforeExecute.addEventListener((e: { cancel: boolean }) => {
-    const home = read('startView');
-    if (!home) return;
-    e.cancel = true;
-    goTo(viewer, home);
-  });
 
   return {
     makeStart() {
@@ -69,6 +63,12 @@ export function setupStartView(viewer: Viewer): { makeStart(): void; clearStart(
     },
     clearStart() {
       storeSetting('startView', '');
+    },
+    /** The start location if set, otherwise the whole Earth. */
+    goHome() {
+      const home = read('startView');
+      if (home) goTo(viewer, home);
+      else viewer.camera.flyHome(1.5);
     },
   };
 }

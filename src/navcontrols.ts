@@ -81,13 +81,107 @@ export interface NavActions {
   resetTiltAndNorth(): void;
 }
 
+/** Keeps pointer events coming to `el` while the button is held (ignored if the pointer is gone). */
+function capture(el: HTMLElement, e: PointerEvent): void {
+  try {
+    el.setPointerCapture(e.pointerId);
+  } catch {
+    // The pointer already went away; the move/up handlers still end the drag.
+  }
+}
+
+/**
+ * Google Earth–style joystick: press anywhere inside `el` and drag. While held, `step`
+ * runs repeatedly with the knob's offset from the centre (x right, y down, each −1…1).
+ * Arrow buttons inside keep working as plain buttons.
+ */
+function joystick(el: HTMLElement, step: (x: number, y: number) => void, viewer: Viewer): void {
+  const knob = el.querySelector<HTMLElement>('.nav-knob')!;
+  let offset: [number, number] | null = null;
+  let timer = 0;
+  const setOffset = (e: PointerEvent) => {
+    const b = el.getBoundingClientRect();
+    const r = b.width / 2;
+    let x = (e.clientX - (b.left + r)) / r;
+    let y = (e.clientY - (b.top + r)) / r;
+    const len = Math.hypot(x, y);
+    if (len > 1) [x, y] = [x / len, y / len];
+    offset = [x, y];
+    knob.style.transform = `translate(calc(-50% + ${x * r * 0.55}px), calc(-50% + ${y * r * 0.55}px))`;
+  };
+  const release = () => {
+    offset = null;
+    window.clearInterval(timer);
+    el.classList.remove('held');
+    knob.style.transform = '';
+  };
+  el.addEventListener('pointerdown', (e) => {
+    if ((e.target as HTMLElement).closest('button')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    capture(el, e);
+    el.classList.add('held');
+    setOffset(e);
+    timer = window.setInterval(() => {
+      // A small dead zone in the middle, so a plain press doesn't drift.
+      if (!offset || Math.hypot(...offset) < 0.12) return;
+      step(offset[0], offset[1]);
+      viewer.scene.requestRender();
+    }, 40);
+  });
+  el.addEventListener('pointermove', (e) => {
+    if (offset) setOffset(e);
+  });
+  el.addEventListener('pointerup', release);
+  el.addEventListener('pointercancel', release);
+  el.addEventListener('lostpointercapture', release);
+}
+
+/**
+ * Vertical spring-back slider: drag the thumb up or down; while held, `step` runs with
+ * the thumb's offset (−1 at the bottom … 1 at the top). Letting go returns it to the middle.
+ */
+function springSlider(track: HTMLElement, thumb: HTMLElement, step: (v: number) => void, viewer: Viewer): void {
+  let value: number | null = null;
+  let timer = 0;
+  const set = (e: PointerEvent) => {
+    const b = track.getBoundingClientRect();
+    value = Math.max(-1, Math.min(1, ((b.top + b.height / 2 - e.clientY) / b.height) * 2));
+    thumb.style.transform = `translate(-50%, calc(-50% - ${value * (b.height / 2 - 8)}px))`;
+  };
+  const release = () => {
+    value = null;
+    window.clearInterval(timer);
+    track.classList.remove('held');
+    thumb.style.transform = '';
+  };
+  track.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    capture(track, e);
+    track.classList.add('held');
+    set(e);
+    timer = window.setInterval(() => {
+      if (value && Math.abs(value) > 0.08) {
+        step(value);
+        viewer.scene.requestRender();
+      }
+    }, 40);
+  });
+  track.addEventListener('pointermove', (e) => {
+    if (value !== null) set(e);
+  });
+  track.addEventListener('pointerup', release);
+  track.addEventListener('pointercancel', release);
+  track.addEventListener('lostpointercapture', release);
+}
+
 /** While a button is held, run `step` repeatedly (first right away). */
 function holdRepeat(button: HTMLElement, step: () => void, viewer: Viewer): void {
   let timer = 0;
   const stop = () => window.clearInterval(timer);
   button.addEventListener('pointerdown', (e) => {
     e.preventDefault();
-    button.setPointerCapture(e.pointerId);
+    capture(button, e);
     const tick = () => {
       step();
       viewer.scene.requestRender();
@@ -100,7 +194,7 @@ function holdRepeat(button: HTMLElement, step: () => void, viewer: Viewer): void
   button.addEventListener('lostpointercapture', stop);
 }
 
-export function setupNavControls(viewer: Viewer, keysEnabled: () => boolean): NavActions {
+export function setupNavControls(viewer: Viewer, keysEnabled: () => boolean, onHome: () => void): NavActions {
   const control = viewer.scene.screenSpaceCameraController;
   control.tiltEventTypes = [
     CameraEventType.MIDDLE_DRAG,
@@ -126,60 +220,89 @@ export function setupNavControls(viewer: Viewer, keysEnabled: () => boolean): Na
   const toggleTopDown = () =>
     orbitTo(viewer, camera.heading, camera.pitch < -1.45 ? TILTED_PITCH : -CesiumMath.PI_OVER_TWO, 0.6);
 
-  // Google Earth–style cluster, top right: look ring, move joystick, (person), zoom slider.
+  // Google Earth–style cluster, top right: look ring, move joystick, (person), zoom slider,
+  // then Home and top-down. Both round controls are joysticks: press and drag inside.
+  const chevron = (dir: string) =>
+    `<svg viewBox="0 0 12 12" class="chev ${dir}"><path d="M3 7.5 6 4.5 9 7.5" /></svg>`;
+  const arrows = (kind: 'look' | 'move') =>
+    (['up', 'down', 'left', 'right'] as const)
+      .map((d) => `<button class="nav-arrow ${d}" data-${kind}="${d}" aria-label="${kind} ${d}">${chevron(d)}</button>`)
+      .join('');
   const panel = document.createElement('div');
   panel.id = 'nav-controls';
   panel.innerHTML = `
     <div class="nav-ring" title="Drag the ring to turn · click N to face north (N)">
       <button class="nav-north" aria-label="Face north">N</button>
-      <button class="nav-arrow up" data-look="up" title="Tilt toward the horizon (Shift+↑)" aria-label="Tilt up">▲</button>
-      <button class="nav-arrow down" data-look="down" title="Tilt toward straight down (Shift+↓)" aria-label="Tilt down">▼</button>
-      <button class="nav-arrow left" data-look="left" title="Turn left (Shift+←)" aria-label="Turn left">◀</button>
-      <button class="nav-arrow right" data-look="right" title="Turn right (Shift+→)" aria-label="Turn right">▶</button>
-      <span class="nav-eye">👁</span>
+      <div class="nav-stick" data-stick="look" title="Look around: press and drag (Shift+arrows)">
+        ${arrows('look')}
+        <span class="nav-knob"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12z" /><circle cx="12" cy="12" r="2.6" /></svg></span>
+      </div>
     </div>
-    <div class="nav-move" title="Move (arrow keys)">
-      <button class="nav-arrow up" data-move="up" aria-label="Move forward">▲</button>
-      <button class="nav-arrow down" data-move="down" aria-label="Move back">▼</button>
-      <button class="nav-arrow left" data-move="left" aria-label="Move left">◀</button>
-      <button class="nav-arrow right" data-move="right" aria-label="Move right">▶</button>
-      <span class="nav-hand">✋</span>
+    <div class="nav-stick nav-move" data-stick="move" title="Move: press and drag (arrow keys)">
+      ${arrows('move')}
+      <span class="nav-knob"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M12 3l-2.5 2.5M12 3l2.5 2.5M12 21l-2.5-2.5M12 21l2.5-2.5M3 12l2.5-2.5M3 12l2.5 2.5M21 12l-2.5-2.5M21 12l-2.5 2.5" /></svg></span>
     </div>
     <div class="nav-zoom">
       <button data-zoom="in" title="Zoom in (+)" aria-label="Zoom in">+</button>
-      <input type="range" min="-100" max="100" value="0" orient="vertical" title="Drag to zoom; it springs back" aria-label="Zoom" />
+      <div class="nav-track" title="Drag up to zoom in, down to zoom out; it springs back">
+        <span class="nav-thumb"></span>
+      </div>
       <button data-zoom="out" title="Zoom out (−)" aria-label="Zoom out">−</button>
     </div>
-    <button class="nav-tilt" title="Switch between top-down and tilted (U)">Tilt</button>`;
+    <div class="nav-small">
+      <button class="nav-home" title="Home: your start location, or the whole Earth" aria-label="Home">
+        <svg viewBox="0 0 24 24"><path d="M4 11 12 4l8 7M6.5 9.5V20h11V9.5" /></svg>
+      </button>
+      <button class="nav-tilt" title="Switch between top-down and tilted (U resets tilt)" aria-label="Top-down or tilted">
+        <svg viewBox="0 0 24 24"><path d="M4 18h16M7 18l3-12M17 18 14 6" /></svg>
+      </button>
+    </div>`;
   viewer.container.append(panel);
 
   // The ring's N turns with the view; dragging around the ring turns the view.
   const ring = panel.querySelector<HTMLElement>('.nav-ring')!;
   const north = panel.querySelector<HTMLElement>('.nav-north')!;
   viewer.scene.postRender.addEventListener(() => {
-    north.style.transform = `rotate(${-CesiumMath.toDegrees(camera.heading)}deg) translateY(-30px)`;
+    north.style.transform = `rotate(${-CesiumMath.toDegrees(camera.heading)}deg) translateY(-33px)`;
   });
-  north.addEventListener('click', actions.northUp);
+  // Drag the rim (or the N itself) to turn; a plain click on the N faces north.
   let ringAngle: number | null = null;
+  let ringTurned = 0;
+  let pressedNorth = false;
   const angleAt = (e: PointerEvent) => {
     const b = ring.getBoundingClientRect();
     return Math.atan2(e.clientX - (b.left + b.width / 2), -(e.clientY - (b.top + b.height / 2)));
   };
   ring.addEventListener('pointerdown', (e) => {
-    if ((e.target as HTMLElement).closest('button')) return;
-    ring.setPointerCapture(e.pointerId);
+    const target = e.target as HTMLElement;
+    if (target.closest('.nav-stick')) return;
+    capture(ring, e);
+    ring.classList.add('turning');
     ringAngle = angleAt(e);
+    ringTurned = 0;
+    pressedNorth = !!target.closest('.nav-north');
   });
   ring.addEventListener('pointermove', (e) => {
     if (ringAngle === null) return;
     const a = angleAt(e);
+    // Unwrap across ±180° so a drag past the bottom doesn't spin the view.
+    const delta = Math.atan2(Math.sin(a - ringAngle), Math.cos(a - ringAngle));
     // Dragging the ring clockwise turns the view clockwise, like turning a dial.
-    turn(-(a - ringAngle), 0);
+    turn(-delta, 0);
+    ringTurned += Math.abs(delta);
     ringAngle = a;
     viewer.scene.requestRender();
   });
-  ring.addEventListener('pointerup', () => (ringAngle = null));
+  const ringUp = () => {
+    if (ringAngle !== null && pressedNorth && ringTurned < 0.05) actions.northUp();
+    ringAngle = null;
+    pressedNorth = false;
+    ring.classList.remove('turning');
+  };
+  ring.addEventListener('pointerup', ringUp);
+  ring.addEventListener('pointercancel', ringUp);
 
+  // Arrow buttons: hold to repeat.
   const lookSteps: Record<string, () => void> = {
     up: () => tilt(CesiumMath.toRadians(1.5), 0),
     down: () => tilt(-CesiumMath.toRadians(1.5), 0),
@@ -197,25 +320,20 @@ export function setupNavControls(viewer: Viewer, keysEnabled: () => boolean): Na
   holdRepeat(panel.querySelector('[data-zoom="in"]')!, () => zoom(viewer, 0.06), viewer);
   holdRepeat(panel.querySelector('[data-zoom="out"]')!, () => zoom(viewer, -0.07), viewer);
 
-  // Zoom slider: hold it above or below the middle to zoom continuously; it springs back.
-  const slider = panel.querySelector<HTMLInputElement>('.nav-zoom input')!;
-  let zoomTimer = 0;
-  slider.addEventListener('pointerdown', () => {
-    window.clearInterval(zoomTimer);
-    zoomTimer = window.setInterval(() => {
-      const v = Number(slider.value) / 100;
-      if (v) zoom(viewer, v > 0 ? v * 0.08 : v * 0.09);
-      viewer.scene.requestRender();
-    }, 40);
-  });
-  const release = () => {
-    window.clearInterval(zoomTimer);
-    slider.value = '0';
-  };
-  slider.addEventListener('pointerup', release);
-  slider.addEventListener('pointercancel', release);
-  slider.addEventListener('change', release);
+  // Joysticks: press anywhere inside and drag; speed grows with distance from the centre.
+  joystick(panel.querySelector('[data-stick="look"]')!, (x, y) => {
+    if (x) turn(CesiumMath.toRadians(3 * x), 0);
+    if (y) tilt(CesiumMath.toRadians(-2 * y), 0);
+  }, viewer);
+  // Up on the stick is forward; the further out, the faster.
+  joystick(panel.querySelector('[data-stick="move"]')!, (x, y) => pan(viewer, -y, x, 0.04), viewer);
 
+  // Zoom slider: drag the thumb up to zoom in, down to zoom out; it springs back.
+  const track = panel.querySelector<HTMLElement>('.nav-track')!;
+  const thumb = panel.querySelector<HTMLElement>('.nav-thumb')!;
+  springSlider(track, thumb, (v) => zoom(viewer, v > 0 ? v * 0.08 : v * 0.09), viewer);
+
+  panel.querySelector('.nav-home')!.addEventListener('click', () => onHome());
   panel.querySelector('.nav-tilt')!.addEventListener('click', toggleTopDown);
 
   document.addEventListener('keydown', (e) => {
