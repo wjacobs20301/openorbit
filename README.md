@@ -36,8 +36,9 @@ Google Earth Pro. It reads public map data directly, so the project runs no serv
 | Zoom | Scroll / pinch | + and − |
 | Face north / top-down | Compass / Tilt buttons | N / T |
 
-In street view: drag or ←/→ to look around 360° photos, ↑/↓ (or W/S) to step along the
-route, F to expand the viewer.
+In street view: drag or ←/→ to look around 360° photos, click the road to move there,
+↑/↓ (or W/S) to step along the route, F to expand the viewer. Moving keeps the direction
+you're facing.
 
 ## Data sources
 
