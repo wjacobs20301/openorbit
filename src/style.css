@@ -52,13 +52,32 @@ html, body {
 
 .brand { font-weight: 650; font-size: 15px; }
 
-.panel h2 {
+.panel h2,
+.panel summary {
   margin: 0 0 6px;
   font-size: 11px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--muted);
 }
+
+.panel summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+}
+.panel summary::-webkit-details-marker { display: none; }
+.panel summary::before {
+  content: '▸';
+  font-size: 10px;
+  transition: transform 0.15s;
+}
+.panel[open] > summary::before { transform: rotate(90deg); }
+.panel[open] > summary { margin-bottom: 8px; }
+details.panel { border-top: 1px solid var(--border); padding-top: 10px; }
 
 input, select, button, .button {
   font: inherit;

@@ -3,12 +3,13 @@ import { PbfReader } from 'pbf';
 import { loadSetting, storeSetting, viaCache } from './platform';
 import { vectorTiles } from './sources';
 
-const CACHE_LIMIT = 300;
+/** Decoded tiles keep their raw buffer (up to ~0.5 MB for dense z14 tiles). */
+const CACHE_LIMIT = 120;
 const cache = new Map<string, Promise<VectorTile | null>>();
 let template: Promise<string | null> | undefined;
 
 /** The current tile URL template, remembered so cached tiles still resolve offline. */
-function tileTemplate(): Promise<string | null> {
+export function tileTemplate(): Promise<string | null> {
   template ??= fetch(vectorTiles.tileJsonUrl)
     .then((res) => res.json() as Promise<{ tiles: string[] }>)
     .then(({ tiles }) => {

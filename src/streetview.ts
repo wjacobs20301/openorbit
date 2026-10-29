@@ -1,8 +1,6 @@
-import { Viewer as SphereViewer } from '@photo-sphere-viewer/core';
-import '@photo-sphere-viewer/core/index.css';
+import type { Viewer as SphereViewer } from '@photo-sphere-viewer/core';
 import { Cartesian3, Color, type Entity, type Viewer } from 'cesium';
-import { Viewer as MapillaryViewer } from 'mapillary-js';
-import 'mapillary-js/dist/mapillary.css';
+import type { Viewer as MapillaryViewer } from 'mapillary-js';
 import { loadSetting, openExternal } from './platform';
 import { streetSources } from './sources';
 
@@ -97,6 +95,11 @@ export class StreetView {
         dist((a.computed_geometry ?? a.geometry).coordinates) <= dist((b.computed_geometry ?? b.geometry).coordinates) ? a : b,
       );
 
+      // Loaded on first use to keep startup light.
+      const [{ Viewer: MapillaryViewer }] = await Promise.all([
+        import('mapillary-js'),
+        import('mapillary-js/dist/mapillary.css'),
+      ]);
       this.reset();
       this.title.textContent = 'Mapillary';
       this.credit.innerHTML = 'Photos © <a href="https://www.mapillary.com" target="_blank">Mapillary</a> contributors, CC BY-SA 4.0';
@@ -154,6 +157,10 @@ export class StreetView {
       if (this.sphere) {
         await this.sphere.setPanorama(url);
       } else {
+        const [{ Viewer: SphereViewer }] = await Promise.all([
+          import('@photo-sphere-viewer/core'),
+          import('@photo-sphere-viewer/core/index.css'),
+        ]);
         this.container.innerHTML = '';
         this.sphere = new SphereViewer({ container: this.container, panorama: url, navbar: ['zoom', 'fullscreen'] });
       }

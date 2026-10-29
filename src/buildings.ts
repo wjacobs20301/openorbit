@@ -19,8 +19,12 @@ import { features, loadVectorTile, tilePointToLonLat } from './vectortiles';
 const TILE_ZOOM = 14;
 /** Only show buildings when the camera is this close to the ground (metres). */
 const MAX_VIEW_HEIGHT = 6000;
+/** Roughly how many buildings to keep on screen; dense cities get fewer tiles. */
+const BUILDING_BUDGET = 60000;
+const MIN_TILES = 4;
 const MAX_TILES = 16;
-const KEEP_TILES = 48;
+/** Spare built tiles kept beyond the visible ones, for panning back. */
+const SPARE_TILES = 4;
 const DEFAULT_COLOR = Color.fromCssColorString('#ece6da');
 const DEFAULT_HEIGHT = 6;
 /** Terrain level sampled for building bases (about 10 m detail). */
@@ -33,6 +37,8 @@ const TERRAIN_LEVEL = 13;
 export class Buildings {
   private readonly tiles = new Map<string, Promise<Primitive | null>>();
   private visible = new Set<string>();
+  /** Running average of buildings per tile, to size the tile count to the budget. */
+  private perTile = 3000;
   private timer?: number;
   private enabled = true;
 
@@ -69,7 +75,7 @@ export class Buildings {
     const cy = mercatorY(here.latitude) * n;
     const wanted = tileRange(view)
       .sort(([ax, ay], [bx, by]) => (ax + 0.5 - cx) ** 2 + (ay + 0.5 - cy) ** 2 - ((bx + 0.5 - cx) ** 2 + (by + 0.5 - cy) ** 2))
-      .slice(0, MAX_TILES);
+      .slice(0, Math.max(MIN_TILES, Math.min(MAX_TILES, Math.round(BUILDING_BUDGET / this.perTile))));
 
     const keys = new Set(wanted.map(([x, y]) => `${x}/${y}`));
     this.showOnly(keys);
@@ -78,22 +84,39 @@ export class Buildings {
       if (this.tiles.has(key)) continue;
       const built = this.build(x, y);
       this.tiles.set(key, built);
-      void built.then((p) => p && (p.show = this.enabled && this.visible.has(key)));
+      void built.then((p) => p && this.setShow(p, key));
     }
-    this.evict(keys);
+    this.evict(keys, wanted.length + SPARE_TILES);
   }
 
   private showOnly(keys: Set<string>): void {
     this.visible = keys;
     for (const [key, promise] of this.tiles) {
-      void promise.then((p) => p && (p.show = this.enabled && this.visible.has(key)));
+      void promise.then((p) => p && this.setShow(p, key));
     }
   }
 
-  /** Drops the oldest hidden tiles once more than KEEP_TILES are built. */
-  private evict(keep: Set<string>): void {
+  private setShow(p: Primitive, key: string): void {
+    const show = this.enabled && this.visible.has(key);
+    if (p.isDestroyed() || p.show === show) return;
+    p.show = show;
+    this.viewer.scene.requestRender();
+  }
+
+  /**
+   * Geometry is built in web workers and only advances while frames are drawn, so keep
+   * requesting frames until the primitive is ready (the globe otherwise idles).
+   */
+  private renderUntilReady(p: Primitive): void {
+    if (p.isDestroyed() || p.ready) return;
+    this.viewer.scene.requestRender();
+    window.setTimeout(() => this.renderUntilReady(p), 100);
+  }
+
+  /** Drops the oldest hidden tiles once more than `limit` are built. */
+  private evict(keep: Set<string>, limit: number): void {
     for (const key of this.tiles.keys()) {
-      if (this.tiles.size <= KEEP_TILES) break;
+      if (this.tiles.size <= limit) break;
       if (keep.has(key)) continue;
       const promise = this.tiles.get(key)!;
       this.tiles.delete(key);
@@ -152,15 +175,20 @@ export class Buildings {
       });
     });
     if (!instances.length) return null;
+    this.perTile = this.perTile * 0.7 + instances.length * 0.3;
 
-    return this.viewer.scene.primitives.add(
+    const primitive: Primitive = this.viewer.scene.primitives.add(
       new Primitive({
         geometryInstances: instances,
         appearance: new PerInstanceColorAppearance({ translucent: false, closed: true }),
         asynchronous: true,
+        // Buildings aren't clickable; skipping pick IDs saves a lot of memory per building.
+        allowPicking: false,
         show: false,
       }),
     );
+    this.renderUntilReady(primitive);
+    return primitive;
   }
 }
 

@@ -18,6 +18,22 @@ import { StreetView } from './streetview';
 type Tool = 'placemark' | 'path' | 'polygon' | 'measure' | 'street' | null;
 
 const { viewer, layers } = createGlobe('globe');
+
+// The globe redraws only on request. Redraw after any UI interaction and whenever
+// entities or data sources change; modules with their own async work request too.
+const redraw = () => viewer.scene.requestRender();
+for (const type of ['click', 'input', 'change', 'keydown'] as const) {
+  document.addEventListener(type, () => {
+    redraw();
+    window.setTimeout(redraw, 150);
+  });
+}
+viewer.entities.collectionChanged.addEventListener(redraw);
+viewer.dataSources.dataSourceAdded.addEventListener((_, ds) => {
+  ds.entities.collectionChanged.addEventListener(redraw);
+  redraw();
+});
+viewer.dataSources.dataSourceRemoved.addEventListener(redraw);
 const overlays = addVectorOverlays(viewer);
 const labels = new PlaceLabels(viewer);
 const buildings = new Buildings(viewer);
@@ -98,7 +114,10 @@ status.id = 'status';
 document.querySelector('#globe')!.append(status);
 let lastMove = 0;
 handler.setInputAction(({ endPosition }: ScreenSpaceEventHandler.MotionEvent) => {
-  if (drawer.kind) drawer.move(pickGround(viewer, endPosition));
+  if (drawer.kind) {
+    drawer.move(pickGround(viewer, endPosition));
+    redraw();
+  }
   const now = performance.now();
   if (now - lastMove < 50) return;
   lastMove = now;
@@ -157,6 +176,7 @@ const googleToggle = addToggle(
       try {
         await google3d.enable(key);
         refreshOpenData();
+        redraw();
         hint.textContent = 'Showing Google 3D. Search now uses Google.';
       } catch (err) {
         googleToggle.checked = false;
@@ -175,7 +195,15 @@ const googleToggle = addToggle(
   'Uses Google Map Tiles API with your own key; usage is billed to your Google Cloud account.',
 );
 addToggle('Sun lighting', false, (on) => (viewer.scene.globe.enableLighting = on));
-addToggle('Terrain shading (atmosphere)', true, (on) => (viewer.scene.globe.showGroundAtmosphere = on));
+addToggle('Atmosphere', true, (on) => (viewer.scene.globe.showGroundAtmosphere = on));
+
+// Sidebar sections remember whether they're open.
+for (const panel of document.querySelectorAll<HTMLDetailsElement>('details[data-panel]')) {
+  const key = `panel.${panel.dataset.panel}`;
+  const saved = loadSetting(key);
+  if (saved) panel.open = saved === 'open';
+  panel.addEventListener('toggle', () => storeSetting(key, panel.open ? 'open' : 'closed'));
+}
 
 // Settings.
 const tokenInput = document.querySelector<HTMLInputElement>('#mapillary-token')!;

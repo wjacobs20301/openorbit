@@ -1,11 +1,13 @@
-# Checks every push and pull request: type-checks and builds the front end, and
+# Checks the code: type-checks and builds the front end, and
 # compiles the Rust desktop shell.
 name: CI
 
+# Manual-only while the account's GitHub Actions billing is blocked (every run was
+# refused before starting). To check every push again, restore:
+#   push: { branches: [main] }
+#   pull_request:
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   check:

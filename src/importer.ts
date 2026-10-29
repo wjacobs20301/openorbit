@@ -6,7 +6,6 @@ import {
   type DataSource,
   type Viewer,
 } from 'cesium';
-import shp from 'shpjs';
 
 /** File types the import button accepts. */
 export const IMPORT_ACCEPT = '.kml,.kmz,.geojson,.json,.gpx,.csv,.zip,.shp,.dbf,.prj,.cpg';
@@ -99,6 +98,7 @@ async function load(files: File[], viewer: Viewer): Promise<Imported[]> {
     } else if (kind === 'csv') {
       out.push(await geoJson(csvToGeoJson(await file.text()), file.name));
     } else if (kind === 'zip') {
+      const { default: shp } = await import('shpjs');
       const parsed = (await shp(await file.arrayBuffer())) as FeatureCollection | FeatureCollection[];
       for (const fc of Array.isArray(parsed) ? parsed : [parsed]) {
         out.push(await geoJson(fc, (fc as { fileName?: string }).fileName ?? file.name));
@@ -112,6 +112,7 @@ async function load(files: File[], viewer: Viewer): Promise<Imported[]> {
 
   for (const [name, parts] of shapeParts) {
     if (!parts.shp) throw new Error(`${name}: choose the .shp file along with its .dbf`);
+    const { default: shp } = await import('shpjs');
     const fc = (await shp({
       shp: await parts.shp.arrayBuffer(),
       dbf: await parts.dbf?.arrayBuffer(),

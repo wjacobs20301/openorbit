@@ -30,6 +30,10 @@ export function createGlobe(container: string): { viewer: Viewer; layers: LayerE
     timeline: false,
     fullscreenButton: false,
     terrainProvider: createTerrainProvider(),
+    // Draw frames only when something changes, so an idle globe uses no CPU/GPU.
+    // Code that changes the scene outside Cesium's own events calls scene.requestRender().
+    requestRenderMode: true,
+    maximumRenderTimeChange: Infinity,
   });
 
   const { scene } = viewer;

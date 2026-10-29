@@ -1,6 +1,7 @@
 import { Math as CesiumMath, type Rectangle, type Viewer } from 'cesium';
 import { isDesktop, viaCache } from './platform';
-import { imagerySources, terrainSource } from './sources';
+import { imagerySources, terrainSource, vectorTiles } from './sources';
+import { tileTemplate } from './vectortiles';
 
 /** Upper bound per download, to stay a polite user of free tile services. */
 const MAX_TILES = 4000;
@@ -47,7 +48,11 @@ function intersect(a: Bounds, b?: [number, number, number, number]): Bounds | nu
  * of detail until the next level would pass MAX_TILES. The few coarser tiles above the
  * area are included too, since the globe needs them before it can draw finer ones.
  */
-export function planDownload(view: Rectangle, extraLevels: number): { urls: string[]; maxZoom: number } {
+export function planDownload(
+  view: Rectangle,
+  extraLevels: number,
+  vectorTemplate: string | null,
+): { urls: string[]; maxZoom: number } {
   const b: Bounds = {
     west: CesiumMath.toDegrees(view.west),
     south: CesiumMath.toDegrees(view.south),
@@ -60,6 +65,8 @@ export function planDownload(view: Rectangle, extraLevels: number): { urls: stri
   const sources = [
     ...imagerySources.filter((s) => s.offline && s.enabledByDefault),
     { url: terrainSource.url, maximumLevel: terrainSource.maximumLevel, bounds: undefined },
+    // Labels, borders, roads and buildings.
+    ...(vectorTemplate ? [{ url: vectorTemplate, maximumLevel: vectorTiles.maximumLevel, bounds: undefined }] : []),
   ];
 
   const levelUrls = (z: number) =>
@@ -103,7 +110,7 @@ export function setupOffline(viewer: Viewer): void {
       status.textContent = 'Point the camera at the ground first.';
       return;
     }
-    const { urls, maxZoom } = planDownload(view, Number(detail.value));
+    const { urls, maxZoom } = planDownload(view, Number(detail.value), await tileTemplate());
     if (!urls.length) {
       status.textContent = 'This view is too large. Zoom in and try again.';
       return;

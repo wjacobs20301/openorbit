@@ -27,36 +27,36 @@
           <p id="tool-hint" class="hint"></p>
         </section>
 
-        <section class="panel">
-          <h2>My places</h2>
+        <details class="panel" data-panel="places" open>
+          <summary>My places</summary>
           <ul id="placemark-list" class="list"></ul>
           <div class="row">
             <button id="kml-export">Export KML</button>
           </div>
-        </section>
+        </details>
 
-        <section class="panel">
-          <h2>Imported data</h2>
+        <details class="panel" data-panel="layers" open>
+          <summary>Layers</summary>
+          <ul id="layer-list" class="list"></ul>
+        </details>
+
+        <details class="panel" data-panel="import">
+          <summary>Imported data</summary>
           <label class="button" title="KML, KMZ, GeoJSON, GPX, CSV, zipped shapefile, or .shp with its .dbf">Import file…<input id="import-input" type="file" multiple hidden /></label>
           <p id="import-status" class="hint">KML, KMZ, GeoJSON, GPX, CSV or shapefile. No size limit.</p>
           <ul id="import-list" class="list"></ul>
-        </section>
+        </details>
 
-        <section class="panel">
-          <h2>Time</h2>
+        <details class="panel" data-panel="time">
+          <summary>Time</summary>
           <input id="time-slider" type="range" step="1" class="wide" aria-label="Imagery date" />
           <p id="time-label" class="time-label">Now</p>
           <label class="check"><input id="time-daily" type="checkbox" /> Daily satellite image (250 m)</label>
           <input id="time-date" type="date" class="wide" aria-label="Daily image date" />
-        </section>
+        </details>
 
-        <section class="panel">
-          <h2>Layers</h2>
-          <ul id="layer-list" class="list"></ul>
-        </section>
-
-        <section id="offline-panel" class="panel" hidden>
-          <h2>Offline</h2>
+        <details class="panel" data-panel="offline" id="offline-panel" hidden>
+          <summary>Offline</summary>
           <label class="field">Detail
             <select id="offline-detail">
               <option value="2">Standard</option>
@@ -66,10 +66,10 @@
           </label>
           <button id="offline-start">Save this view for offline</button>
           <p id="offline-status" class="hint">Places you've already viewed are saved automatically.</p>
-        </section>
+        </details>
 
-        <section class="panel">
-          <h2>Settings</h2>
+        <details class="panel" data-panel="settings">
+          <summary>Settings</summary>
           <label class="field">Mapillary access token
             <input id="mapillary-token" type="password" placeholder="Optional, from mapillary.com/developer" />
           </label>
@@ -77,7 +77,7 @@
             <input id="google-key" type="password" placeholder="Optional, for Google 3D (Map Tiles + Geocoding APIs)" />
           </label>
           <button id="clear-cache" hidden>Clear tile cache</button>
-        </section>
+        </details>
 
         <footer id="credits-note" class="hint">Imagery and data credits appear at the bottom of the globe.</footer>
       </aside>

@@ -78,6 +78,7 @@ export class PlaceLabels {
   setEnabled(on: boolean): void {
     this.enabled = on;
     this.labels.show = on;
+    this.viewer.scene.requestRender();
     if (on) this.schedule();
   }
 
@@ -159,6 +160,7 @@ export class PlaceLabels {
         pixelOffset: new Cartesian2(0, -2),
       });
     }
+    scene.requestRender();
   }
 }
 
