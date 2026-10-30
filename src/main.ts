@@ -1,20 +1,24 @@
 import {
+  BoundingSphere,
+  Cartesian3,
+  Cartographic,
   EllipsoidTerrainProvider,
+  HeadingPitchRange,
   JulianDate,
-  type Cartesian3,
   type Entity,
   Math as CesiumMath,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
 } from 'cesium';
 import { Balloon } from './balloon';
+import { setupContextMenu, whatsHere } from './contextmenu';
 import { Buildings } from './buildings';
 import { Drawer } from './draw';
 import './style.css';
 import { createGlobe, formatAltitude, formatCoords, pickGround } from './globe';
 import { Google3D } from './google3d';
 import { setupHistory, type HistoryControl } from './history';
-import { setupImport } from './importer';
+import { canImport, setupImport } from './importer';
 import { KeyedImagery } from './keyedimagery';
 import { PlaceLabels } from './labels';
 import { Measure } from './measure';
@@ -45,6 +49,7 @@ import { Tours } from './tour';
 import { setupSun, type SunControl } from './sun';
 import { createTerrainProvider } from './terrain';
 import { openInGoogleEarthWeb, openInGoogleMaps, saveImage, viewLocation } from './viewtools';
+import { setupPlacesFilter } from './findplaces';
 
 type Tool = 'placemark' | 'path' | 'polygon' | 'measure' | 'street' | null;
 
@@ -130,7 +135,8 @@ setupSearch(viewer, () => (google3d.active ? loadSetting('googleKey') : null));
 const nav = setupNavControls(viewer, () => !street.isOpen, () => startView.goHome());
 const pegman = new Pegman(viewer, street);
 pegman.onTap = () => setTool('street');
-setupImport(viewer);
+const importer = setupImport(viewer);
+setupPlacesFilter();
 setupOffline(viewer);
 
 // Handy for poking at the scene from devtools during development.
@@ -226,6 +232,17 @@ handler.setInputAction(({ endPosition }: ScreenSpaceEventHandler.MotionEvent) =>
   updateStatus();
 }, ScreenSpaceEventType.MOUSE_MOVE);
 viewer.camera.changed.addEventListener(() => updateStatus());
+
+// Streaming indicator, like Google Earth's: spins while map tiles are still loading.
+const streaming = document.createElement('div');
+streaming.id = 'streaming';
+streaming.title = 'Loading imagery and terrain';
+streaming.hidden = true;
+document.querySelector('#globe')!.append(streaming);
+viewer.scene.globe.tileLoadProgressEvent.addEventListener((queued: number) => {
+  streaming.hidden = queued === 0;
+  streaming.title = queued ? `Loading ${queued} map tiles` : '';
+});
 
 // ---- Layers panel: a small tree, grouped like Google Earth's.
 const layerList = document.querySelector<HTMLUListElement>('#layer-list')!;
@@ -499,6 +516,92 @@ if (!isDesktop) {
     syncMenu = await setupMenu(actions);
   });
 }
+
+// ---- Right-click menu on the map.
+setupContextMenu(viewer.canvas, (at) => pickGround(viewer, at), (ground) => {
+  const lon = CesiumMath.toDegrees(ground.longitude);
+  const lat = CesiumMath.toDegrees(ground.latitude);
+  const coords = `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+  return [
+    {
+      label: "What's here?",
+      run: () => {
+        hint.textContent = 'Looking up this place…';
+        whatsHere(lon, lat).then(
+          (text) => (hint.textContent = text),
+          () => (hint.textContent = "Couldn't look up this place right now."),
+        );
+      },
+    },
+    {
+      label: 'Add placemark here',
+      run: () => {
+        setTool(null);
+        editor.open(places.addPoint(ground), true);
+      },
+    },
+    { label: 'Street view here', run: () => void street.openAt(lon, lat) },
+    {
+      label: 'Measure from here',
+      run: () => {
+        setTool('measure');
+        measure.add(ground);
+      },
+    },
+    {
+      label: 'Centre the view here',
+      run: () => {
+        const { camera } = viewer;
+        const range = Cartesian3.distance(camera.positionWC, Cartographic.toCartesian(ground));
+        camera.flyToBoundingSphere(new BoundingSphere(Cartographic.toCartesian(ground), 0), {
+          offset: new HeadingPitchRange(camera.heading, camera.pitch, range),
+          duration: 0.8,
+        });
+      },
+    },
+    {
+      label: 'Copy coordinates',
+      run: () =>
+        void navigator.clipboard.writeText(coords).then(
+          () => (hint.textContent = `Copied ${coords}`),
+          () => (hint.textContent = coords),
+        ),
+    },
+  ];
+});
+
+// ---- Drop files onto the window to open them, as in Google Earth. Pictures become
+// image overlays; KML, GPX, shapefiles and the rest open in Temporary Places.
+const dropHint = document.createElement('div');
+dropHint.id = 'drop-hint';
+dropHint.textContent = 'Drop to open';
+dropHint.hidden = true;
+document.body.append(dropHint);
+let dragDepth = 0;
+const hasFiles = (e: DragEvent) => !!e.dataTransfer?.types.includes('Files');
+window.addEventListener('dragenter', (e) => {
+  if (!hasFiles(e)) return;
+  dragDepth++;
+  dropHint.hidden = false;
+});
+window.addEventListener('dragleave', (e) => {
+  if (hasFiles(e) && --dragDepth <= 0) dropHint.hidden = true;
+});
+window.addEventListener('dragover', (e) => {
+  if (hasFiles(e)) e.preventDefault();
+});
+window.addEventListener('drop', (e) => {
+  if (!hasFiles(e)) return;
+  e.preventDefault();
+  dragDepth = 0;
+  dropHint.hidden = true;
+  const files = [...(e.dataTransfer?.files ?? [])];
+  const pictures = files.filter((f) => /^image\/(png|jpeg|gif|webp)$/.test(f.type));
+  const data = files.filter((f) => !pictures.includes(f) && canImport(f));
+  pictures.forEach((f) => void imageOverlays.add(f));
+  void importer.openFiles(data);
+  if (!pictures.length && !data.length) hint.textContent = "OpenOrbit can't open that kind of file.";
+});
 
 // ---- Settings dialog.
 const tokenInput = document.querySelector<HTMLInputElement>('#mapillary-token')!;

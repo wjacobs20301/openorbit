@@ -16,6 +16,7 @@ import {
 } from 'cesium';
 import { idb, STORES } from './idb';
 import { loadSetting, storeSetting, unlockCameraSoon } from './platform';
+import { showUndo } from './toast';
 
 /**
  * A picture draped on the ground (KML GroundOverlay). Stored as an unrotated box
@@ -153,7 +154,8 @@ export class ImageOverlays {
     this.render();
   }
 
-  private async add(file: File): Promise<void> {
+  /** Adds a picture file as a new overlay over the current view (also used for drops). */
+  async add(file: File): Promise<void> {
     const url = URL.createObjectURL(file);
     const { width, height } = await new Promise<HTMLImageElement>((resolve, reject) => {
       const img = new Image();
@@ -328,8 +330,13 @@ export class ImageOverlays {
     return b;
   }
 
-  private async remove(id: string): Promise<void> {
+  /** Deletes an overlay, offering Undo unless `quiet` (e.g. cancelling a new one). */
+  private async remove(id: string, quiet = false): Promise<void> {
     if (this.editing?.id === id) this.close(false);
+    const index = this.overlays.findIndex((o) => o.id === id);
+    const overlay = this.overlays[index];
+    // Keep the picture in memory so Undo can put it back.
+    const image = quiet ? undefined : await idb<Blob | undefined>(STORES.overlayImages, 'readonly', (s) => s.get(id)).catch(() => undefined);
     this.overlays = this.overlays.filter((o) => o.id !== id);
     this.source.entities.removeById(id);
     const url = this.urls.get(id);
@@ -341,6 +348,20 @@ export class ImageOverlays {
     this.persist();
     this.render();
     this.viewer.scene.requestRender();
+    if (overlay && image) {
+      showUndo(`Deleted ${overlay.name}`, () => void this.restore(overlay, image, index));
+    }
+  }
+
+  private async restore(overlay: ImageOverlay, image: Blob, index: number): Promise<void> {
+    await idb(STORES.overlayImages, 'readwrite', (s) => s.put(image, overlay.id));
+    this.overlays.splice(Math.min(index, this.overlays.length), 0, overlay);
+    const url = URL.createObjectURL(image);
+    this.urls.set(overlay.id, url);
+    await this.decode(overlay.id, url).catch(() => undefined);
+    this.draw(overlay);
+    this.persist();
+    this.render();
   }
 
   // ---- Editing
@@ -362,7 +383,7 @@ export class ImageOverlays {
     if (!o) return;
     if (!save && this.isNew) {
       this.editing = undefined;
-      void this.remove(o.id);
+      void this.remove(o.id, true);
     } else {
       if (!save) Object.assign(o, this.snapshot);
       this.draw(o);

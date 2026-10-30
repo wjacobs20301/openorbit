@@ -213,7 +213,7 @@ async function load(files: File[], viewer: Viewer): Promise<Imported[]> {
 }
 
 /** Wires the import button and the list of imported layers. */
-export function setupImport(viewer: Viewer): void {
+export function setupImport(viewer: Viewer): { openFiles(files: File[]): Promise<void> } {
   const input = document.querySelector<HTMLInputElement>('#import-input')!;
   const list = document.querySelector<HTMLUListElement>('#import-list')!;
   const keptList = document.querySelector<HTMLUListElement>('#kept-list')!;
@@ -242,9 +242,14 @@ export function setupImport(viewer: Viewer): void {
     }
   });
 
-  input.addEventListener('change', async () => {
+  input.addEventListener('change', () => {
     const files = [...(input.files ?? [])];
     input.value = '';
+    void openFiles(files);
+  });
+
+  /** Opens files into Temporary Places (from the Open button or a drop onto the window). */
+  async function openFiles(files: File[]): Promise<void> {
     if (!files.length) return;
     status.textContent = 'Importing…';
     try {
@@ -264,7 +269,14 @@ export function setupImport(viewer: Viewer): void {
     } catch (err) {
       status.textContent = `Import failed: ${(err as Error).message}`;
     }
-  });
+  }
+  return { openFiles };
+}
+
+/** True for files the importer can open (by extension). */
+export function canImport(file: File): boolean {
+  const kind = file.name.toLowerCase().split('.').pop() ?? '';
+  return IMPORT_ACCEPT.split(',').some((e) => e === `.${kind}`);
 }
 
 /** True for KML folder/document entities: they group other features and draw nothing. */

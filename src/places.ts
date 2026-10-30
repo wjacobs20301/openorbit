@@ -14,6 +14,7 @@ import {
 } from 'cesium';
 import { centroid, formatArea, formatDistance, pathLength, polygonArea, toLonLat, type LonLat } from './geometry';
 import { loadSetting, saveTextFile, storeSetting } from './platform';
+import { showUndo } from './toast';
 
 export type FeatureKind = 'point' | 'line' | 'polygon';
 
@@ -200,11 +201,22 @@ export class Places {
     this.update(snapshot);
   }
 
-  remove(id: string): void {
-    this.features = this.features.filter((x) => x.id !== id);
+  /** Deletes a place, offering Undo unless `quiet` (e.g. cancelling a new one). */
+  remove(id: string, quiet = false): void {
+    const index = this.features.findIndex((x) => x.id === id);
+    if (index < 0) return;
+    const [f] = this.features.splice(index, 1);
     this.source.entities.removeById(id);
     this.persist();
     this.render();
+    if (!quiet) {
+      showUndo(`Deleted ${f.name}`, () => {
+        this.features.splice(Math.min(index, this.features.length), 0, f);
+        this.addEntity(f);
+        this.persist();
+        this.render();
+      });
+    }
   }
 
   /**
@@ -391,11 +403,20 @@ export class Places {
       this.render();
     }));
     const remove = button('×', 'Delete folder (its places move up to My Places)', () => {
-      for (const f of this.features) if (f.folder === folder.id) f.folder = undefined;
+      const members = this.features.filter((f) => f.folder === folder.id);
+      const index = this.folders.indexOf(folder);
+      members.forEach((f) => (f.folder = undefined));
       this.folders = this.folders.filter((d) => d.id !== folder.id);
       this.persist();
       this.refreshShown();
       this.render();
+      showUndo(`Deleted folder ${folder.name}`, () => {
+        this.folders.splice(Math.min(index, this.folders.length), 0, folder);
+        members.forEach((f) => (f.folder = folder.id));
+        this.persist();
+        this.refreshShown();
+        this.render();
+      });
     });
     row.append(twisty, visible, name, remove);
     li.append(row);

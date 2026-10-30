@@ -77,7 +77,7 @@ export class PlaceEditor {
     const f = this.feature;
     if (!f) return;
     if (save) this.places.update(f);
-    else if (this.isNew) this.places.remove(f.id);
+    else if (this.isNew) this.places.remove(f.id, true);
     else this.places.restore(this.snapshot!);
     this.feature = this.snapshot = undefined;
     this.grab = null;

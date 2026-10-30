@@ -8,6 +8,7 @@ import {
   type Viewer,
 } from 'cesium';
 import { isTyping, loadSetting, saveBinaryFile, storeSetting } from './platform';
+import { showUndo } from './toast';
 
 /** One camera keyframe: seconds from the start, where the camera is and where it looks. */
 interface Frame {
@@ -250,9 +251,15 @@ export class Tours {
       remove.title = 'Delete tour';
       remove.addEventListener('click', () => {
         if (this.current?.id === tour.id) this.closePlayer();
+        const index = this.tours.indexOf(tour);
         this.tours = this.tours.filter((x) => x.id !== tour.id);
         this.persist();
         this.render();
+        showUndo(`Deleted ${tour.name}`, () => {
+          this.tours.splice(Math.min(index, this.tours.length), 0, tour);
+          this.persist();
+          this.render();
+        });
       });
       li.append(icon, name, play, remove);
       this.list.append(li);

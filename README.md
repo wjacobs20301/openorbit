@@ -33,6 +33,10 @@ Google Earth Pro. It reads public map data directly, so the project runs no serv
 - Tours: Record a Tour from the toolbar, or fly along any path or line; play them back
   with a scrubber, speed and loop (Space plays/pauses); save a tour as an MP4/WebM video
 - Layer checkboxes and View options are remembered between sessions
+- Drag files onto the window to open them (pictures become image overlays)
+- Right-click the globe: What's here?, add a placemark, street view, measure, centre the
+  view, copy coordinates
+- Undo after deleting a place, folder, image overlay or tour; Find in Places filter box
 - Distance measuring
 - Street-level photos: Panoramax (no key), Mapillary (optional token), and a one-click
   "Open in Google Street View" button
