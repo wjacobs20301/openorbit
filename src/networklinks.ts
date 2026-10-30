@@ -1,5 +1,5 @@
 import { KmlDataSource, type Viewer } from 'cesium';
-import { dropToGround } from './importer';
+import { aboveTerrain, dropToGround } from './importer';
 import { fetchBytes, loadSetting, storeSetting } from './platform';
 import { showUndo } from './toast';
 
@@ -87,6 +87,7 @@ export class NetworkLinks {
       const bytes = await fetchBytes(link.url);
       await source.load(new Blob([bytes]), { clampToGround: true, sourceUri: link.url });
       dropToGround(source);
+      aboveTerrain(source);
       this.errors.delete(link.id);
     } catch (err) {
       this.errors.set(link.id, `Couldn't load: ${(err as Error).message ?? err}`);

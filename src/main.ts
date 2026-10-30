@@ -55,6 +55,7 @@ import { setupPlacesFilter } from './findplaces';
 import { NetworkLinks } from './networklinks';
 import { setupTimeBar } from './timebar';
 import { Grid } from './grid';
+import { trackHorizon } from './ontop';
 import { OverviewMap } from './overviewmap';
 
 type Tool = 'placemark' | 'path' | 'polygon' | 'measure' | 'street' | null;
@@ -67,6 +68,7 @@ let syncMenu: (() => void) | undefined;
 
 const app = document.querySelector<HTMLElement>('#app')!;
 const { viewer, layers } = createGlobe('globe');
+trackHorizon(viewer);
 const startView = setupStartView(viewer);
 const scaleLegend = setupScaleLegend(viewer);
 const grid = new Grid(viewer);

@@ -16,6 +16,7 @@ import { unlockCameraSoon } from './platform';
 import { PLACEMARK_ICONS, placemarkIcon } from './icons';
 import { DEFAULT_FILL, DEFAULT_WIDTH, KIND_NAMES, measure, type AltitudeMode, type Feature, type Places } from './places';
 import { getUnits } from './units';
+import { ON_TOP } from './ontop';
 
 const MIN_POINTS = { point: 1, line: 2, polygon: 3 } as const;
 
@@ -374,7 +375,7 @@ export class PlaceEditor {
     this.handles.entities.removeAll();
     if (f.kind === 'point') return;
     const at = (lonlat: () => LonLat) => new CallbackProperty(() => Cartesian3.fromDegrees(...lonlat()), false);
-    const common = { heightReference: HeightReference.CLAMP_TO_GROUND, disableDepthTestDistance: Number.POSITIVE_INFINITY };
+    const common = { heightReference: HeightReference.CLAMP_TO_GROUND, disableDepthTestDistance: ON_TOP };
     const n = f.coords.length;
     for (let i = 0; i < n; i++) {
       this.handles.entities.add({

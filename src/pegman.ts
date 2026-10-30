@@ -16,6 +16,7 @@ import { PERSON_ICON } from './icons';
 import { VectorLineProvider, type Painter } from './overlay';
 import { loadPhotoTile, nearestPhoto, PHOTO_TILE_ZOOM, type PhotoSpot } from './photomap';
 import type { StreetView } from './streetview';
+import { ON_TOP } from './ontop';
 
 /** How far (screen pixels) the person reaches to snap onto a photo. */
 const SNAP_PIXELS = 28;
@@ -193,7 +194,7 @@ export class Pegman {
           height: 40,
           verticalOrigin: VerticalOrigin.BOTTOM,
           heightReference: HeightReference.CLAMP_TO_GROUND,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          disableDepthTestDistance: ON_TOP,
         },
         point: {
           pixelSize: 10,
@@ -201,7 +202,7 @@ export class Pegman {
           outlineColor: Color.WHITE,
           outlineWidth: 2,
           heightReference: HeightReference.CLAMP_TO_GROUND,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          disableDepthTestDistance: ON_TOP,
         },
       });
     }

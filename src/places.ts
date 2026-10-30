@@ -20,6 +20,7 @@ import { loadSetting, saveTextFile, storeSetting } from './platform';
 import { showUndo } from './toast';
 import { formatLatLon, onUnitsChange } from './units';
 import { BOTTOM_ANCHORED, KML_ICON_HREF, placemarkIcon, type PlacemarkIcon } from './icons';
+import { ON_TOP } from './ontop';
 
 export type FeatureKind = 'point' | 'line' | 'polygon';
 
@@ -408,7 +409,7 @@ export class Places {
               outlineColor: Color.BLACK,
               outlineWidth: 1.5,
               heightReference,
-              disableDepthTestDistance: Number.POSITIVE_INFINITY,
+              disableDepthTestDistance: ON_TOP,
             }
           : undefined,
       billboard: icon
@@ -418,7 +419,7 @@ export class Places {
             height: 30,
             verticalOrigin: BOTTOM_ANCHORED.includes(icon) ? VerticalOrigin.BOTTOM : VerticalOrigin.CENTER,
             heightReference,
-            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            disableDepthTestDistance: ON_TOP,
           }
         : undefined,
       polyline:
@@ -461,7 +462,7 @@ export class Places {
         verticalOrigin: VerticalOrigin.BOTTOM,
         pixelOffset: new Cartesian2(0, f.kind !== 'point' ? 0 : icon && BOTTOM_ANCHORED.includes(icon) ? -32 : -14),
         heightReference,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        disableDepthTestDistance: ON_TOP,
       },
     });
   }

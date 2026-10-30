@@ -1,6 +1,7 @@
 import { ArcType, Cartesian2, Cartesian3, Color, CustomDataSource, EllipsoidGeodesic, HeightReference, LabelStyle, Math as CesiumMath, Rectangle, type Viewer } from 'cesium';
 import { pickGround } from './globe';
 import { getCoordFormat, onUnitsChange } from './units';
+import { ON_TOP } from './ontop';
 
 /** Spacings to choose from, in degrees, coarsest first. */
 const SPACINGS = [30, 10, 5, 2, 1, 0.5, 0.25, 0.1, 0.05, 0.02, 0.01, 0.005];
@@ -127,6 +128,6 @@ function label(text: string) {
     outlineColor: Color.BLACK.withAlpha(0.8),
     outlineWidth: 3,
     heightReference: HeightReference.CLAMP_TO_GROUND,
-    disableDepthTestDistance: Number.POSITIVE_INFINITY,
+    disableDepthTestDistance: ON_TOP,
   };
 }

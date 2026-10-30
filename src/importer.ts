@@ -13,6 +13,7 @@ import {
   type Viewer,
 } from 'cesium';
 import { forgetFiles, keepFiles, keptFiles } from './keptfiles';
+import { ON_TOP } from './ontop';
 import { loadSetting, storeSetting } from './platform';
 import { geocoder } from './sources';
 
@@ -156,6 +157,15 @@ function parseCsv(text: string): string[][] {
  * lines that have <tessellate>; others (common in exported files) are drawn at sea level
  * and vanish under hills. Anything with real heights in its coordinates keeps them.
  */
+/** Keeps a file's markers and labels on top of hills, but behind the globe (see ontop.ts). */
+export function aboveTerrain(source: DataSource): void {
+  for (const entity of source.entities.values) {
+    if (entity.billboard && !entity.billboard.disableDepthTestDistance) entity.billboard.disableDepthTestDistance = ON_TOP;
+    if (entity.label && !entity.label.disableDepthTestDistance) entity.label.disableDepthTestDistance = ON_TOP;
+    if (entity.point && !entity.point.disableDepthTestDistance) entity.point.disableDepthTestDistance = ON_TOP;
+  }
+}
+
 export function dropToGround(source: DataSource): void {
   const now = JulianDate.now();
   const outlines: Entity.ConstructorOptions[] = [];
@@ -265,6 +275,7 @@ async function load(files: File[], viewer: Viewer, onProgress?: (text: string) =
     }
   }
 
+  for (const item of out) aboveTerrain(item.source);
   for (const [name, shape] of shapeParts) {
     if (!shape.shp) throw new Error(`${name}: choose the .shp file along with its .dbf`);
     const { default: shp } = await import('shpjs');
@@ -276,6 +287,7 @@ async function load(files: File[], viewer: Viewer, onProgress?: (text: string) =
     })) as FeatureCollection;
     const files = [shape.shp, shape.dbf, shape.prj, shape.cpg].filter((f): f is File => !!f);
     out.push(await geoJson(fc, `${name}.shp`, files));
+    aboveTerrain(out[out.length - 1].source);
   }
   return out;
 }

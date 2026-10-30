@@ -11,6 +11,7 @@ import {
 } from 'cesium';
 import { formatDistance } from './geometry';
 import { formatHeight } from './units';
+import { ON_TOP } from './ontop';
 
 /** Samples along the line; enough for a smooth chart without many terrain requests. */
 const SAMPLES = 240;
@@ -182,7 +183,7 @@ export class ElevationProfile {
           outlineColor: Color.WHITE,
           outlineWidth: 2,
           heightReference: HeightReference.CLAMP_TO_GROUND,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          disableDepthTestDistance: ON_TOP,
         },
       });
     }

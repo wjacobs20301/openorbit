@@ -12,6 +12,7 @@ import {
 } from 'cesium';
 import { formatArea, formatDistance, pathLength, polygonArea, toLonLat, type LonLat } from './geometry';
 import { formatHeight, onUnitsChange } from './units';
+import { ON_TOP } from './ontop';
 
 export type RulerMode = 'line' | 'path' | 'polygon' | 'circle';
 
@@ -134,7 +135,7 @@ export class Measure {
     this.points.push(point);
     const marker = this.viewer.entities.add({
       position: Cartographic.toCartesian(point),
-      point: { pixelSize: 7, color: Color.WHITE, disableDepthTestDistance: Number.POSITIVE_INFINITY },
+      point: { pixelSize: 7, color: Color.WHITE, disableDepthTestDistance: ON_TOP },
     });
     this.entities.push(marker);
     this.update();
@@ -200,7 +201,7 @@ export class Measure {
           outlineWidth: 3,
           outlineColor: Color.BLACK,
           pixelOffset: new Cartesian2(0, -18),
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          disableDepthTestDistance: ON_TOP,
         },
       }),
     );

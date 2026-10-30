@@ -17,6 +17,7 @@ import {
 import { idb, STORES } from './idb';
 import { loadSetting, storeSetting, unlockCameraSoon } from './platform';
 import { showUndo } from './toast';
+import { ON_TOP } from './ontop';
 
 /**
  * A picture draped on the ground (KML GroundOverlay). Stored as an unrotated box
@@ -452,7 +453,7 @@ export class ImageOverlays {
   private buildHandles(): void {
     const o = this.editing!;
     this.handles.entities.removeAll();
-    const common = { heightReference: HeightReference.CLAMP_TO_GROUND, disableDepthTestDistance: Number.POSITIVE_INFINITY };
+    const common = { heightReference: HeightReference.CLAMP_TO_GROUND, disableDepthTestDistance: ON_TOP };
     const at = (fn: () => [number, number]) => new CallbackProperty(() => Cartesian3.fromDegrees(...fn()), false);
     for (let i = 0; i < 4; i++) {
       this.handles.entities.add({

@@ -12,6 +12,7 @@ import { PERSON_ICON, VIEW_CONE } from './icons';
 import { photosNear, type PhotoSpot } from './photomap';
 import { isTyping, loadSetting, openExternal } from './platform';
 import { streetSources } from './sources';
+import { ON_TOP } from './ontop';
 
 interface PanoramaxItem {
   id: string;
@@ -559,7 +560,7 @@ export class StreetView {
   private placeMarker(lon: number, lat: number): void {
     this.markers.forEach((m) => this.viewer.entities.remove(m));
     const position = Cartesian3.fromDegrees(lon, lat);
-    const common = { heightReference: HeightReference.CLAMP_TO_GROUND, disableDepthTestDistance: Number.POSITIVE_INFINITY };
+    const common = { heightReference: HeightReference.CLAMP_TO_GROUND, disableDepthTestDistance: ON_TOP };
     this.markers = [
       this.viewer.entities.add({
         position,

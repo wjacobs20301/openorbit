@@ -12,6 +12,7 @@ import {
   VerticalOrigin,
   type Viewer,
 } from 'cesium';
+import { horizonDistance } from './ontop';
 import { features, loadVectorTile, tilePointToLonLat } from './vectortiles';
 
 interface PlaceStyle {
@@ -43,6 +44,10 @@ const STYLES: Record<string, PlaceStyle> = {
 const MAX_TILES = 24;
 const MAX_LABELS = 250;
 const PADDING = 6;
+/** Hide names whose ground faces the camera at a shallower angle than this (cosine): ~70°. */
+const EDGE_ON = 0.35;
+const scratchUp = new Cartesian3();
+const scratchView = new Cartesian3();
 
 interface Candidate {
   text: string;
@@ -72,6 +77,11 @@ export class PlaceLabels {
     viewer.camera.moveEnd.addEventListener(() => this.schedule());
     viewer.camera.percentageChanged = 0.2;
     viewer.camera.changed.addEventListener(() => this.schedule());
+    // Drawn over terrain on this side of the globe, hidden on the far side (see ontop.ts).
+    viewer.scene.preRender.addEventListener(() => {
+      const distance = horizonDistance();
+      for (let i = 0; i < this.labels.length; i++) this.labels.get(i).disableDepthTestDistance = distance;
+    });
     this.schedule();
   }
 
@@ -131,11 +141,18 @@ export class PlaceLabels {
     const boxes: [number, number, number, number][] = [];
     const { clientWidth: width, clientHeight: height } = scene.canvas;
     this.labels.removeAll();
+    // Only from high up, where the planet's edge is against space; near the ground, far-off
+    // names along a tilted view's horizon are wanted.
+    const fromSpace = camera.positionCartographic.height > 500000;
 
     for (const c of candidates) {
       if (this.labels.length >= MAX_LABELS) break;
       const position = Cartesian3.fromDegrees(c.lon, c.lat);
       if (!occluder.isPointVisible(position)) continue;
+      // Skip names right at the planet's edge, which would hang out in space.
+      const up = Cartesian3.normalize(position, scratchUp);
+      const toCamera = Cartesian3.normalize(Cartesian3.subtract(camera.positionWC, position, scratchView), scratchView);
+      if (fromSpace && Cartesian3.dot(up, toCamera) < EDGE_ON) continue;
       const screen = SceneTransforms.worldToWindowCoordinates(scene, position);
       if (!screen || screen.x < 0 || screen.y < 0 || screen.x > width || screen.y > height) continue;
 
@@ -155,8 +172,7 @@ export class PlaceLabels {
         style: LabelStyle.FILL_AND_OUTLINE,
         verticalOrigin: VerticalOrigin.BOTTOM,
         heightReference: HeightReference.CLAMP_TO_GROUND,
-        // Lift labels toward the camera so terrain doesn't swallow them.
-        eyeOffset: new Cartesian3(0, 0, -200),
+        disableDepthTestDistance: horizonDistance(),
         pixelOffset: new Cartesian2(0, -2),
       });
     }
