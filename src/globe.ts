@@ -42,6 +42,9 @@ export function createGlobe(container: string): { viewer: Viewer; layers: LayerE
     // Code that changes the scene outside Cesium's own events calls scene.requestRender().
     requestRenderMode: true,
     maximumRenderTimeChange: Infinity,
+    // Draw at the screen's full pixel density. Cesium's default draws Retina screens at
+    // half resolution and stretches the result, which makes imagery and labels look soft.
+    useBrowserRecommendedResolution: false,
   });
 
   const { scene } = viewer;
@@ -70,9 +73,13 @@ export function createGlobe(container: string): { viewer: Viewer; layers: LayerE
 /** The ground position under a screen point, or undefined when pointing at space. */
 export function pickGround(viewer: Viewer, position: Cartesian2): Cartographic | undefined {
   const { scene } = viewer;
+  const ray = viewer.camera.getPickRay(position);
+  const onGlobe = ray && scene.globe.pick(ray, scene);
+  // Out in space the depth buffer can still return a stray position; only trust it when
+  // the pointer is actually over the planet.
+  if (!onGlobe) return undefined;
   const cartesian = scene.pickPositionSupported ? scene.pickPosition(position) : undefined;
-  const fallback = cartesian ?? scene.globe.pick(viewer.camera.getPickRay(position)!, scene);
-  return fallback ? Cartographic.fromCartesian(fallback) : undefined;
+  return Cartographic.fromCartesian(cartesian ?? onGlobe);
 }
 
 /** The pointer position in the chosen coordinate format. */

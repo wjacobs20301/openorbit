@@ -64,6 +64,24 @@ export const imagerySources: ImagerySource[] = [
     enabledByDefault: true,
     offline: true,
   },
+  {
+    // USDA aerial photos, drawn by the server per tile (it isn't pre-tiled), so only for
+    // close-up views where the USGS tiles above run out of detail. Public domain.
+    id: 'naip',
+    name: 'USGS NAIP aerial photos (United States, 30–60 cm)',
+    url: 'https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPPlus/ImageServer/exportImage?bbox={westProjected},{southProjected},{eastProjected},{northProjected}&bboxSR=3857&imageSR=3857&size=256,256&format=jpg&compressionQuality=90&f=image',
+    credit: 'Imagery: <a href="https://www.usgs.gov/programs/national-geospatial-program/national-map">USGS The National Map</a>, USDA NAIP',
+    // Drawn (and fetched) only this close: further out the USGS tiles are as sharp, and
+    // NAIP's mix of survey years shows as patches next to them.
+    showFromLevel: 16,
+    maximumLevel: 19,
+    bounds: [-125, 24.4, -66.8, 49.4],
+    fillsNoData: true,
+    outside: (lon, lat) => lat > 49 && lon > -123.33 && lon < -95.15,
+    enabledByDefault: true,
+    // Rendered on demand by the server: not for bulk downloads.
+    offline: false,
+  },
 ];
 
 /**
