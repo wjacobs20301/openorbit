@@ -1,15 +1,10 @@
 import { Cartesian2, Cartographic, EllipsoidGeodesic, type Viewer } from 'cesium';
 import { pickGround } from './globe';
+import { niceScale, onUnitsChange } from './units';
 
 /** Longest the bar may be, in pixels. */
 const MAX_BAR = 120;
 const SAMPLE_PX = 100;
-
-/** The largest 1, 2 or 5 × 10ⁿ distance that fits under `max` metres. */
-function niceDistance(max: number): number {
-  const power = 10 ** Math.floor(Math.log10(max));
-  return [5, 2, 1].map((m) => m * power).find((d) => d <= max) ?? power;
-}
 
 /**
  * Scale legend (View > Scale Legend in Google Earth): a bar for a round distance,
@@ -35,11 +30,12 @@ export function setupScaleLegend(viewer: Viewer): { setShown(on: boolean): void;
       return;
     }
     const metresPerPx = new EllipsoidGeodesic(Cartographic.clone(a), Cartographic.clone(b)).surfaceDistance / SAMPLE_PX;
-    const distance = niceDistance(metresPerPx * MAX_BAR);
+    const scale = niceScale(metresPerPx * MAX_BAR);
     el.hidden = false;
-    bar.style.width = `${Math.round(distance / metresPerPx)}px`;
-    label.textContent = distance >= 1000 ? `${distance / 1000} km` : `${distance} m`;
+    bar.style.width = `${Math.round(scale.metres / metresPerPx)}px`;
+    label.textContent = scale.label;
   };
+  onUnitsChange(update);
   viewer.camera.changed.addEventListener(update);
   viewer.camera.moveEnd.addEventListener(update);
   window.setTimeout(update, 1500);

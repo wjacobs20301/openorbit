@@ -15,7 +15,8 @@ import { setupContextMenu, whatsHere } from './contextmenu';
 import { Buildings } from './buildings';
 import { Drawer } from './draw';
 import './style.css';
-import { createGlobe, formatAltitude, formatCoords, pickGround } from './globe';
+import { createGlobe, formatCoords, pickGround } from './globe';
+import { formatAltitude, formatHeight, formatLatLon, getCoordFormat, getUnits, onUnitsChange, setCoordFormat, setUnits, type CoordFormat } from './units';
 import { Google3D } from './google3d';
 import { setupHistory, type HistoryControl } from './history';
 import { canImport, setupImport } from './importer';
@@ -48,8 +49,13 @@ import { StreetView } from './streetview';
 import { Tours } from './tour';
 import { setupSun, type SunControl } from './sun';
 import { createTerrainProvider } from './terrain';
-import { openInGoogleEarthWeb, openInGoogleMaps, saveImage, viewLocation } from './viewtools';
+import { openInGoogleEarthWeb, openInGoogleMaps, viewLocation } from './viewtools';
+import { ImageSaver } from './saveimage';
 import { setupPlacesFilter } from './findplaces';
+import { NetworkLinks } from './networklinks';
+import { setupTimeBar } from './timebar';
+import { Grid } from './grid';
+import { OverviewMap } from './overviewmap';
 
 type Tool = 'placemark' | 'path' | 'polygon' | 'measure' | 'street' | null;
 
@@ -63,6 +69,8 @@ const app = document.querySelector<HTMLElement>('#app')!;
 const { viewer, layers } = createGlobe('globe');
 const startView = setupStartView(viewer);
 const scaleLegend = setupScaleLegend(viewer);
+const grid = new Grid(viewer);
+const overviewMap = new OverviewMap(viewer);
 
 // The globe redraws only on request. Redraw after any UI interaction and whenever
 // entities or data sources change; modules with their own async work request too.
@@ -86,7 +94,7 @@ const buildings = new Buildings(viewer);
 const google3d = new Google3D(viewer);
 const places = new Places(viewer);
 const hint = document.querySelector<HTMLElement>('#tool-hint')!;
-const measure = new Measure(viewer, (summary) => (hint.textContent = summary));
+const measure = new Measure(viewer);
 const street = new StreetView(viewer);
 const balloon = new Balloon(viewer);
 const profile = new ElevationProfile(viewer);
@@ -120,6 +128,11 @@ places.onExport = async () => {
   await saveBinaryFile('My Places.kmz', await zip([{ name: 'doc.kml', data: kml }, ...files]), 'kmz');
 };
 places.onEdit = (id) => editor.open(id);
+measure.onClose = () => setTool(null);
+measure.onSave = (kind, coords, name) => {
+  places.addShape(kind, coords, name);
+  hint.textContent = `Saved “${name}” to My Places.`;
+};
 const drawer = new Drawer(
   viewer,
   (summary) => (hint.textContent = summary),
@@ -137,10 +150,13 @@ const pegman = new Pegman(viewer, street);
 pegman.onTap = () => setTool('street');
 const importer = setupImport(viewer);
 setupPlacesFilter();
+setupTimeBar(viewer);
+const networkLinks = new NetworkLinks(viewer);
+const imageSaver = new ImageSaver(viewer, () => places.legend(), (text) => (hint.textContent = text));
 setupOffline(viewer);
 
 // Handy for poking at the scene from devtools during development.
-if (import.meta.env.DEV) Object.assign(window, { viewer, imageOverlays });
+if (import.meta.env.DEV) Object.assign(window, { viewer, imageOverlays, networkLinks, imageSaver });
 
 // ---- Tools (toolbar buttons with data-tool): one at a time; clicking again turns it off.
 const hints: Record<Exclude<Tool, null>, string> = {
@@ -163,6 +179,7 @@ function setTool(next: Tool): void {
   pegman.showCoverage(tool === 'street');
   if (tool === 'path') drawer.start('line');
   if (tool === 'polygon') drawer.start('polygon');
+  if (tool === 'measure') measure.open();
 }
 toolButtons.forEach((b) => b.addEventListener('click', () => setTool(b.dataset.tool as Tool)));
 document.addEventListener('keydown', (e) => {
@@ -224,14 +241,19 @@ handler.setInputAction(({ endPosition }: ScreenSpaceEventHandler.MotionEvent) =>
     drawer.move(pickGround(viewer, endPosition));
     redraw();
   }
+  if (tool === 'measure') measure.move(pickGround(viewer, endPosition));
   const now = performance.now();
   if (now - lastMove < 50) return;
   lastMove = now;
   const ground = pickGround(viewer, endPosition);
-  pointer = ground ? `${formatCoords(ground)}    elev ${Math.round(ground.height)} m` : '';
+  pointer = ground ? `${formatCoords(ground)}    elev ${formatHeight(ground.height)}` : '';
   updateStatus();
 }, ScreenSpaceEventType.MOUSE_MOVE);
 viewer.camera.changed.addEventListener(() => updateStatus());
+onUnitsChange(() => {
+  pointer = '';
+  updateStatus();
+});
 
 // Streaming indicator, like Google Earth's: spins while map tiles are still loading.
 const streaming = document.createElement('div');
@@ -416,6 +438,22 @@ const toggles: AppActions['toggles'] = {
       syncViewState();
     },
   },
+  grid: {
+    get: () => grid.shown,
+    set: (on) => {
+      grid.setShown(on);
+      storeSetting('view.grid', on ? 'shown' : 'hidden');
+      syncViewState();
+    },
+  },
+  overviewMap: {
+    get: () => overviewMap.shown,
+    set: (on) => {
+      overviewMap.setShown(on);
+      storeSetting('view.overviewMap', on ? 'shown' : 'hidden');
+      syncViewState();
+    },
+  },
   atmosphere: { get: () => viewer.scene.globe.showGroundAtmosphere, set: setAtmosphere },
   sun: { get: () => sunCtl.open, set: (on) => sunCtl.setOpen(on) },
   history: { get: () => historyCtl.open, set: (on) => historyCtl.setOpen(on) },
@@ -425,11 +463,14 @@ const importInput = document.querySelector<HTMLInputElement>('#import-input')!;
 const actions: AppActions = {
   open: () => importInput.click(),
   saveKml: () => void places.exportKml(),
-  saveImage: () => void saveImage(viewer),
+  saveImage: () => (imageSaver.open ? imageSaver.close() : imageSaver.show()),
+  copyImage: () => void imageSaver.copy(),
+  print: () => imageSaver.show(),
   googleMaps: () => void openInGoogleMaps(viewer),
   googleEarthWeb: () => void openInGoogleEarthWeb(viewer),
   recordTour: () => tours.toggleRecording(),
   addImageOverlay: () => imageOverlays.choose(),
+  addNetworkLink: () => networkLinks.choose(),
   playTour: () => {
     toggles.sidebar.set(true);
     document.querySelector<HTMLDetailsElement>('[data-panel="places"]')!.open = true;
@@ -505,9 +546,13 @@ if (!isDesktop) {
     else if (e.shiftKey && k === 'KeyG') run(actions.addPolygon);
     else if (e.altKey && k === 'KeyB') run(toolbarActions.sidebar);
     else if (e.altKey && k === 'KeyS') run(actions.saveImage);
+    else if (e.altKey && k === 'KeyC') run(actions.copyImage);
+    else if (!e.shiftKey && !e.altKey && k === 'KeyP') run(actions.print);
     else if (!e.shiftKey && !e.altKey && k === 'KeyF') run(actions.find);
     else if (!e.shiftKey && !e.altKey && k === 'KeyS') run(actions.saveKml);
     else if (!e.shiftKey && !e.altKey && k === 'KeyO') run(actions.open);
+    else if (!e.shiftKey && !e.altKey && k === 'KeyL') run(() => toggles.grid.set(!toggles.grid.get()));
+    else if (e.altKey && k === 'KeyM') run(() => toggles.overviewMap.set(!toggles.overviewMap.get()));
     else if (k === 'Comma') run(actions.settings);
     else if (k === 'Slash') run(actions.shortcuts);
   });
@@ -521,7 +566,7 @@ if (!isDesktop) {
 setupContextMenu(viewer.canvas, (at) => pickGround(viewer, at), (ground) => {
   const lon = CesiumMath.toDegrees(ground.longitude);
   const lat = CesiumMath.toDegrees(ground.latitude);
-  const coords = `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+  const coords = formatLatLon(lat, lon);
   return [
     {
       label: "What's here?",
@@ -604,6 +649,12 @@ window.addEventListener('drop', (e) => {
 });
 
 // ---- Settings dialog.
+const unitsSelect = document.querySelector<HTMLSelectElement>('#units')!;
+unitsSelect.value = getUnits();
+unitsSelect.addEventListener('change', () => setUnits(unitsSelect.value === 'imperial' ? 'imperial' : 'metric'));
+const coordSelect = document.querySelector<HTMLSelectElement>('#coord-format')!;
+coordSelect.value = getCoordFormat();
+coordSelect.addEventListener('change', () => setCoordFormat(coordSelect.value as CoordFormat));
 const tokenInput = document.querySelector<HTMLInputElement>('#mapillary-token')!;
 tokenInput.value = loadSetting('mapillaryToken');
 tokenInput.addEventListener('change', () => storeSetting('mapillaryToken', tokenInput.value.trim()));
@@ -631,6 +682,8 @@ for (const cls of ['no-toolbar', 'no-sidebar', 'no-status', 'no-nav']) {
   if (loadSetting(`view.${cls}`) === 'hidden') app.classList.add(cls);
 }
 if (loadSetting('view.scaleLegend') === 'hidden') scaleLegend.setShown(false);
+if (loadSetting('view.grid') === 'shown') grid.setShown(true);
+if (loadSetting('view.overviewMap') === 'shown') overviewMap.setShown(true);
 
 updateStatus();
 syncViewState();

@@ -5,6 +5,8 @@ export interface AppActions {
   open(): void;
   saveKml(): void;
   saveImage(): void;
+  copyImage(): void;
+  print(): void;
   googleMaps(): void;
   googleEarthWeb(): void;
   copyViewLocation(): void;
@@ -12,6 +14,7 @@ export interface AppActions {
   makeStartLocation(): void;
   recordTour(): void;
   addImageOverlay(): void;
+  addNetworkLink(): void;
   playTour(): void;
   find(): void;
   settings(): void;
@@ -34,6 +37,8 @@ export type ToggleId =
   | 'statusBar'
   | 'navigation'
   | 'scaleLegend'
+  | 'grid'
+  | 'overviewMap'
   | 'atmosphere'
   | 'sun'
   | 'history';
@@ -86,6 +91,8 @@ export async function setupMenu(a: AppActions): Promise<() => void> {
       await separator(),
       await item('Save Image…', a.saveImage, 'Alt+CmdOrCtrl+S'),
       await separator(),
+      await item('Print…', a.print, 'CmdOrCtrl+P'),
+      await separator(),
       await item('View in Google Maps', a.googleMaps),
       await item('View in Google Earth on Web', a.googleEarthWeb),
       await separator(),
@@ -105,6 +112,7 @@ export async function setupMenu(a: AppActions): Promise<() => void> {
       await PredefinedMenuItem.new({ item: 'Paste' }),
       await PredefinedMenuItem.new({ item: 'SelectAll' }),
       await separator(),
+      await item('Copy Image', a.copyImage, 'Alt+CmdOrCtrl+C'),
       await item('Copy View Location', a.copyViewLocation, 'Shift+CmdOrCtrl+C'),
       await item('Show Elevation Profile', a.elevationProfile),
       await item('Find', a.find, 'CmdOrCtrl+F'),
@@ -128,6 +136,8 @@ export async function setupMenu(a: AppActions): Promise<() => void> {
       await check('statusBar', 'Status Bar'),
       await check('navigation', 'Show Navigation'),
       await check('scaleLegend', 'Scale Legend'),
+      await check('grid', 'Grid', 'CmdOrCtrl+L'),
+      await check('overviewMap', 'Overview Map', 'Alt+CmdOrCtrl+M'),
       await separator(),
       await check('atmosphere', 'Atmosphere'),
       await check('sun', 'Sun'),
@@ -158,6 +168,7 @@ export async function setupMenu(a: AppActions): Promise<() => void> {
       await item('Path', a.addPath, 'Shift+CmdOrCtrl+T'),
       await item('Polygon', a.addPolygon, 'Shift+CmdOrCtrl+G'),
       await item('Image Overlay…', a.addImageOverlay, 'Shift+CmdOrCtrl+O'),
+      await item('Network Link…', a.addNetworkLink),
       await separator(),
       await item('Tour (Record)', a.recordTour),
     ],

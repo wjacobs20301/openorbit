@@ -13,7 +13,9 @@ import {
 } from 'cesium';
 import type { LonLat } from './geometry';
 import { unlockCameraSoon } from './platform';
-import { DEFAULT_FILL, DEFAULT_WIDTH, KIND_NAMES, measure, type Feature, type Places } from './places';
+import { PLACEMARK_ICONS, placemarkIcon } from './icons';
+import { DEFAULT_FILL, DEFAULT_WIDTH, KIND_NAMES, measure, type AltitudeMode, type Feature, type Places } from './places';
+import { getUnits } from './units';
 
 const MIN_POINTS = { point: 1, line: 2, polygon: 3 } as const;
 
@@ -161,6 +163,8 @@ export class PlaceEditor {
     measurement.className = 'hint edit-measure';
 
     this.panel.append(title, field('Name', name), field('Folder', folder), field('Description', description), style);
+    if (f.kind === 'point') this.panel.append(this.iconPicker(f));
+    this.panel.append(this.altitudeFields(f, field), this.viewFields(f));
 
     if (f.kind === 'point') {
       const lat = document.createElement('input');
@@ -168,6 +172,7 @@ export class PlaceEditor {
       for (const [input, i] of [[lat, 1], [lon, 0]] as const) {
         input.type = 'number';
         input.step = 'any';
+        input.className = i === 1 ? 'edit-lat' : 'edit-lon';
         input.value = f.coords[0][i].toFixed(6);
         input.addEventListener('change', () => {
           const v = Number(input.value);
@@ -204,6 +209,141 @@ export class PlaceEditor {
     this.changed();
   }
 
+  /** A row of icons to choose from, in the place's colour. */
+  private iconPicker(f: Feature): HTMLElement {
+    const row = document.createElement('div');
+    row.className = 'icon-picker';
+    row.setAttribute('role', 'radiogroup');
+    row.setAttribute('aria-label', 'Icon');
+    const draw = () => {
+      row.replaceChildren(
+        ...PLACEMARK_ICONS.map((icon) => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.title = icon[0].toUpperCase() + icon.slice(1);
+          b.setAttribute('role', 'radio');
+          b.setAttribute('aria-checked', String((f.icon ?? 'dot') === icon));
+          b.classList.toggle('active', (f.icon ?? 'dot') === icon);
+          const img = document.createElement('img');
+          img.src = placemarkIcon(icon, f.color);
+          img.alt = b.title;
+          b.append(img);
+          b.addEventListener('click', () => {
+            f.icon = icon === 'dot' ? undefined : icon;
+            draw();
+            this.redraw();
+          });
+          return b;
+        }),
+      );
+    };
+    draw();
+    // Follow colour changes.
+    this.panel.addEventListener('input', (e) => {
+      if ((e.target as HTMLInputElement).type === 'color') draw();
+    });
+    return row;
+  }
+
+  /** Google Earth's Altitude tab: on the ground, above it, or above sea level. */
+  private altitudeFields(f: Feature, field: (label: string, input: HTMLElement) => HTMLElement): HTMLElement {
+    const box = document.createElement('fieldset');
+    box.className = 'altitude';
+    const legend = document.createElement('legend');
+    legend.textContent = 'Altitude';
+    const imperial = getUnits() === 'imperial';
+    const toShown = (m: number) => Math.round(imperial ? m * 3.28084 : m);
+    const fromShown = (v: number) => (imperial ? v / 3.28084 : v);
+
+    const mode = document.createElement('select');
+    mode.add(new Option('Clamped to ground', 'clamp'));
+    mode.add(new Option('Relative to ground', 'relative'));
+    mode.add(new Option('Absolute (above sea level)', 'absolute'));
+    mode.value = f.altitudeMode ?? 'clamp';
+    const height = document.createElement('input');
+    height.type = 'number';
+    height.step = '1';
+    height.value = String(toShown(f.altitude ?? 0));
+    const extrude = document.createElement('input');
+    extrude.type = 'checkbox';
+    extrude.checked = !!f.extrude;
+    const extrudeLabel = document.createElement('label');
+    extrudeLabel.className = 'check';
+    extrudeLabel.append(extrude, f.kind === 'point' ? ' Extend to ground' : ' Extend sides to ground');
+
+    const sync = () => {
+      const raised = mode.value !== 'clamp';
+      height.disabled = !raised;
+      extrude.disabled = !raised;
+    };
+    mode.addEventListener('change', () => {
+      f.altitudeMode = mode.value === 'clamp' ? undefined : (mode.value as AltitudeMode);
+      // Lift a newly raised place a little so the change is visible.
+      if (f.altitudeMode && !f.altitude) {
+        f.altitude = 50;
+        height.value = String(toShown(50));
+      }
+      sync();
+      this.redraw();
+    });
+    height.addEventListener('input', () => {
+      const v = Number(height.value);
+      if (!Number.isFinite(v)) return;
+      f.altitude = fromShown(v);
+      this.redraw();
+    });
+    extrude.addEventListener('change', () => {
+      f.extrude = extrude.checked || undefined;
+      this.redraw();
+    });
+    sync();
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.append(field(imperial ? 'Height (ft)' : 'Height (m)', height), extrudeLabel);
+    box.append(legend, mode, row);
+    return box;
+  }
+
+  /** "Snapshot current view": Go and double-click then fly to the view as it is now. */
+  private viewFields(f: Feature): HTMLElement {
+    const row = document.createElement('div');
+    row.className = 'row view-row';
+    const note = document.createElement('span');
+    note.className = 'hint';
+    const snapshot = document.createElement('button');
+    snapshot.type = 'button';
+    snapshot.textContent = 'Snapshot current view';
+    snapshot.title = 'Go will fly to the view as it is now';
+    const reset = document.createElement('button');
+    reset.type = 'button';
+    reset.textContent = 'Reset';
+    reset.title = 'Forget the saved view';
+    const sync = () => {
+      note.textContent = f.view ? 'View saved' : '';
+      reset.hidden = !f.view;
+    };
+    snapshot.addEventListener('click', () => {
+      const { camera } = this.viewer;
+      const c = camera.positionCartographic;
+      f.view = {
+        lon: CesiumMath.toDegrees(c.longitude),
+        lat: CesiumMath.toDegrees(c.latitude),
+        height: c.height,
+        heading: CesiumMath.toDegrees(camera.heading),
+        pitch: CesiumMath.toDegrees(camera.pitch),
+        roll: CesiumMath.toDegrees(camera.roll),
+      };
+      sync();
+    });
+    reset.addEventListener('click', () => {
+      f.view = undefined;
+      sync();
+    });
+    sync();
+    row.append(snapshot, reset, note);
+    return row;
+  }
+
   /** Rebuilds the feature's look (colour, width, name) and keeps it following edits. */
   private redraw(): void {
     const f = this.feature!;
@@ -219,7 +359,8 @@ export class PlaceEditor {
     if (text && f.kind !== 'point') text.textContent = measure(f);
     if (f.kind === 'point') {
       // The boxes are laid out Latitude, Longitude.
-      const [lat, lon] = this.panel.querySelectorAll<HTMLInputElement>('input[type="number"]');
+      const lat = this.panel.querySelector<HTMLInputElement>('.edit-lat');
+      const lon = this.panel.querySelector<HTMLInputElement>('.edit-lon');
       if (lat && document.activeElement !== lat) lat.value = f.coords[0][1].toFixed(6);
       if (lon && document.activeElement !== lon) lon.value = f.coords[0][0].toFixed(6);
     }

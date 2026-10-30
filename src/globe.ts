@@ -13,6 +13,7 @@ import { NoDataImageryProvider } from './nodata';
 import { viaCache } from './platform';
 import { imagerySources, type ImagerySource } from './sources';
 import { createTerrainProvider } from './terrain';
+import { formatLatLon } from './units';
 
 export interface LayerEntry {
   source: ImagerySource;
@@ -27,6 +28,8 @@ export function createGlobe(container: string): { viewer: Viewer; layers: LayerE
     sceneModePicker: false,
     navigationHelpButton: false,
     animation: false,
+    // The KML time bar (timebar.ts) drives the clock itself.
+    automaticallyTrackDataSourceClocks: false,
     timeline: false,
     fullscreenButton: false,
     // Home lives in our navigation controls (navcontrols.ts).
@@ -72,19 +75,7 @@ export function pickGround(viewer: Viewer, position: Cartesian2): Cartographic |
   return fallback ? Cartographic.fromCartesian(fallback) : undefined;
 }
 
-/** Degrees-minutes-seconds, as Google Earth shows them: 49°13'56.39" N  120°48'25.82" W. */
+/** The pointer position in the chosen coordinate format. */
 export function formatCoords(c: Cartographic): string {
-  const dms = (deg: number, pos: string, neg: string) => {
-    const a = Math.abs(deg);
-    const d = Math.floor(a);
-    const m = Math.floor((a - d) * 60);
-    const s = ((a - d) * 60 - m) * 60;
-    return `${d}°${String(m).padStart(2, '0')}'${s.toFixed(2).padStart(5, '0')}" ${deg >= 0 ? pos : neg}`;
-  };
-  return `${dms(CesiumMath.toDegrees(c.latitude), 'N', 'S')}  ${dms(CesiumMath.toDegrees(c.longitude), 'E', 'W')}`;
-}
-
-/** Eye altitude in metres or kilometres. */
-export function formatAltitude(m: number): string {
-  return m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(2)} km`;
+  return formatLatLon(CesiumMath.toDegrees(c.latitude), CesiumMath.toDegrees(c.longitude));
 }

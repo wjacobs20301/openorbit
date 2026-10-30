@@ -1,20 +1,25 @@
 import {
+  ArcType,
   CallbackProperty,
   Cartesian2,
   Cartesian3,
+  Cartographic,
   Color,
   CustomDataSource,
   HeightReference,
   LabelStyle,
+  Math as CesiumMath,
   PolygonHierarchy,
+  sampleTerrainMostDetailed,
   VerticalOrigin,
-  type Cartographic,
   type Entity,
   type Viewer,
 } from 'cesium';
 import { centroid, formatArea, formatDistance, pathLength, polygonArea, toLonLat, type LonLat } from './geometry';
 import { loadSetting, saveTextFile, storeSetting } from './platform';
 import { showUndo } from './toast';
+import { formatLatLon, onUnitsChange } from './units';
+import { BOTTOM_ANCHORED, KML_ICON_HREF, placemarkIcon, type PlacemarkIcon } from './icons';
 
 export type FeatureKind = 'point' | 'line' | 'polygon';
 
@@ -35,6 +40,27 @@ export interface Feature {
   folder?: string;
   /** Unticked in the Places list. */
   hidden?: boolean;
+  /** Placemark icon; a plain dot when unset. */
+  icon?: PlacemarkIcon;
+  /** Google Earth's Altitude tab: on the ground (default), above the ground, or above sea level. */
+  altitudeMode?: AltitudeMode;
+  /** Metres, for relative and absolute modes. */
+  altitude?: number;
+  /** Extend sides (or a placemark's line) down to the ground. */
+  extrude?: boolean;
+  /** A saved camera view ("Snapshot current view"); Go flies here. */
+  view?: SavedView;
+}
+
+export type AltitudeMode = 'clamp' | 'relative' | 'absolute';
+
+export interface SavedView {
+  lon: number;
+  lat: number;
+  height: number;
+  heading: number;
+  pitch: number;
+  roll: number;
 }
 
 export interface Folder {
@@ -68,24 +94,34 @@ function kmlColor(hex: string, alpha: number): string {
 export function measure(f: Feature): string {
   if (f.kind === 'line') return formatDistance(pathLength(f.coords));
   if (f.kind === 'polygon') return `${formatArea(polygonArea(f.coords))}, perimeter ${formatDistance(pathLength(f.coords, true))}`;
-  return `${f.coords[0][1].toFixed(6)}, ${f.coords[0][0].toFixed(6)}`;
+  return formatLatLon(f.coords[0][1], f.coords[0][0]);
 }
 
 function placemarkKml(f: Feature, indent: string): string {
-  const coords = (pts: LonLat[]) => pts.map(([lon, lat]) => `${lon},${lat},0`).join(' ');
+  const mode = f.altitudeMode ?? 'clamp';
+  const alt = mode === 'clamp' ? 0 : (f.altitude ?? 0);
+  const coords = (pts: LonLat[]) => pts.map(([lon, lat]) => `${lon},${lat},${alt}`).join(' ');
   const width = f.width ?? DEFAULT_WIDTH;
+  const height =
+    mode === 'clamp'
+      ? '<tessellate>1</tessellate>'
+      : `<extrude>${f.extrude ? 1 : 0}</extrude><altitudeMode>${mode === 'relative' ? 'relativeToGround' : 'absolute'}</altitudeMode>`;
   const geometry =
     f.kind === 'point'
-      ? `<Point><coordinates>${coords(f.coords)}</coordinates></Point>`
+      ? `<Point>${mode === 'clamp' ? '' : height}<coordinates>${coords(f.coords)}</coordinates></Point>`
       : f.kind === 'line'
-        ? `<LineString><tessellate>1</tessellate><coordinates>${coords(f.coords)}</coordinates></LineString>`
-        : `<Polygon><tessellate>1</tessellate><outerBoundaryIs><LinearRing><coordinates>${coords([...f.coords, f.coords[0]])}</coordinates></LinearRing></outerBoundaryIs></Polygon>`;
+        ? `<LineString>${height}<coordinates>${coords(f.coords)}</coordinates></LineString>`
+        : `<Polygon>${height}<outerBoundaryIs><LinearRing><coordinates>${coords([...f.coords, f.coords[0]])}</coordinates></LinearRing></outerBoundaryIs></Polygon>`;
+  const v = f.view;
+  const camera = v
+    ? `\n${indent}  <Camera><longitude>${v.lon}</longitude><latitude>${v.lat}</latitude><altitude>${v.height}</altitude><heading>${v.heading}</heading><tilt>${v.pitch + 90}</tilt><roll>${v.roll}</roll><altitudeMode>absolute</altitudeMode></Camera>`
+    : '';
   return `${indent}<Placemark>
 ${indent}  <name>${escapeXml(f.name)}</name>
 ${indent}  <visibility>${f.hidden ? 0 : 1}</visibility>
-${indent}  <description>${escapeXml(f.description ?? '')}</description>
+${indent}  <description>${escapeXml(f.description ?? '')}</description>${camera}
 ${indent}  <Style>
-${indent}    <IconStyle><color>${kmlColor(f.color, 1)}</color></IconStyle>
+${indent}    <IconStyle><color>${kmlColor(f.color, 1)}</color><Icon><href>${KML_ICON_HREF[f.icon ?? 'dot']}</href></Icon></IconStyle>
 ${indent}    <LineStyle><color>${kmlColor(f.color, 1)}</color><width>${width}</width></LineStyle>
 ${indent}    <PolyStyle><color>${kmlColor(f.color, f.fillOpacity ?? DEFAULT_FILL)}</color></PolyStyle>
 ${indent}  </Style>
@@ -129,6 +165,8 @@ export class Places {
   private features: Feature[] = [];
   private folders: Folder[] = [];
   private readonly list = document.querySelector<HTMLUListElement>('#placemark-list')!;
+  /** Terrain heights under raised places' corners, by their coordinates (undefined while loading). */
+  private readonly groundCache = new Map<string, number[] | undefined>();
   /** Called with a path's name and points when its 📈 button is clicked. */
   onProfile?: (name: string, positions: Cartesian3[]) => void;
   /** Called with a path's name and points when its ▶ (fly along) button is clicked. */
@@ -144,6 +182,11 @@ export class Places {
     this.folders = this.read<Folder>(FOLDERS_KEY);
     this.features.forEach((f) => this.addEntity(f));
     this.render();
+    // Measurements in tooltips and balloons follow the chosen units.
+    onUnitsChange(() => {
+      this.features.forEach((f) => this.update(f, false));
+      this.render();
+    });
 
     document.querySelector('#kml-export')!.addEventListener('click', () => void this.exportKml());
     document.querySelector('#new-folder')!.addEventListener('click', () => this.addFolder());
@@ -167,8 +210,8 @@ export class Places {
     return this.addFeature('point', [toLonLat(at)]);
   }
 
-  addShape(kind: 'line' | 'polygon', coords: LonLat[]): string {
-    return this.addFeature(kind, coords);
+  addShape(kind: 'line' | 'polygon', coords: LonLat[], name?: string): string {
+    return this.addFeature(kind, coords, name);
   }
 
   get(id: string): Feature | undefined {
@@ -177,6 +220,27 @@ export class Places {
 
   entity(id: string): Entity | undefined {
     return this.source.entities.getById(id);
+  }
+
+  /** The places showing on the map, for the legend in Save Image. */
+  legend(): { name: string; color: string; kind: FeatureKind }[] {
+    return this.features.filter((f) => this.isShown(f)).map((f) => ({ name: f.name, color: f.color, kind: f.kind }));
+  }
+
+  /** Flies to a place: its saved view if it has one, otherwise to fit it. */
+  flyTo(f: Feature): void {
+    const v = f.view;
+    if (v) {
+      this.viewer.camera.flyTo({
+        destination: Cartesian3.fromDegrees(v.lon, v.lat, v.height),
+        orientation: { heading: CesiumMath.toRadians(v.heading), pitch: CesiumMath.toRadians(v.pitch), roll: CesiumMath.toRadians(v.roll) },
+      });
+    } else if (f.kind === 'point') {
+      const [lon, lat] = f.coords[0];
+      this.viewer.camera.flyTo({ destination: Cartesian3.fromDegrees(lon, lat, 2500 + (f.altitude ?? 0)) });
+    } else {
+      void this.viewer.flyTo(this.entity(f.id)!);
+    }
   }
 
   allFolders(): readonly Folder[] {
@@ -226,7 +290,7 @@ export class Places {
   makeLive(f: Feature): void {
     const entity = this.entity(f.id);
     if (!entity) return;
-    const positions = () => f.coords.map(([lon, lat]) => Cartesian3.fromDegrees(lon, lat));
+    const positions = () => f.coords.map(([lon, lat]) => Cartesian3.fromDegrees(lon, lat, this.liveHeight(f, lon, lat)));
     if (f.kind === 'point') {
       entity.position = new CallbackProperty(() => positions()[0], false) as never;
       return;
@@ -241,14 +305,50 @@ export class Places {
       entity.polygon.hierarchy = new CallbackProperty(() => new PolygonHierarchy(positions()), false) as never;
     }
     entity.position = new CallbackProperty(() => {
-      const anchor = f.kind === 'line' ? f.coords[Math.floor(f.coords.length / 2)] : centroid(f.coords);
-      return Cartesian3.fromDegrees(...anchor);
+      const [lon, lat] = f.kind === 'line' ? f.coords[Math.floor(f.coords.length / 2)] : centroid(f.coords);
+      return Cartesian3.fromDegrees(lon, lat, this.liveHeight(f, lon, lat));
     }, false) as never;
   }
 
-  private addFeature(kind: FeatureKind, coords: LonLat[]): string {
+  /** A vertex's height while it's being dragged (terrain from the loaded tiles). */
+  private liveHeight(f: Feature, lon: number, lat: number): number {
+    const mode = f.altitudeMode ?? 'clamp';
+    if (mode === 'clamp') return 0;
+    const alt = f.altitude ?? 0;
+    if (mode === 'absolute') return alt;
+    return (this.viewer.scene.globe.getHeight(Cartographic.fromDegrees(lon, lat)) ?? 0) + alt;
+  }
+
+  /**
+   * Heights above the ellipsoid for each corner of a raised place, or undefined when it
+   * sits on the ground. "Relative to ground" looks up the terrain and redraws when it has it.
+   */
+  private heightsFor(f: Feature): number[] | undefined {
+    const mode = f.altitudeMode ?? 'clamp';
+    if (mode === 'clamp') return undefined;
+    const alt = f.altitude ?? 0;
+    if (mode === 'absolute') return f.coords.map(() => alt);
+    const key = JSON.stringify(f.coords);
+    const ground = this.groundCache.get(key);
+    if (ground) return ground.map((h) => h + alt);
+    if (!this.groundCache.has(key)) {
+      this.groundCache.set(key, undefined);
+      const done = (heights: number[]) => {
+        this.groundCache.set(key, heights);
+        const current = this.get(f.id);
+        if (current && JSON.stringify(current.coords) === key) this.update(current, false);
+      };
+      sampleTerrainMostDetailed(this.viewer.terrainProvider, f.coords.map(([lon, lat]) => Cartographic.fromDegrees(lon, lat))).then(
+        (cs) => done(cs.map((c) => c.height ?? 0)),
+        () => done(f.coords.map(() => 0)),
+      );
+    }
+    return f.coords.map((c) => this.liveHeight(f, c[0], c[1]));
+  }
+
+  private addFeature(kind: FeatureKind, coords: LonLat[], name?: string): string {
     const count = this.features.filter((f) => f.kind === kind).length + 1;
-    const f: Feature = { id: crypto.randomUUID(), name: `${KIND_NAMES[kind]} ${count}`, kind, coords, color: DEFAULT_COLORS[kind] };
+    const f: Feature = { id: crypto.randomUUID(), name: name ?? `${KIND_NAMES[kind]} ${count}`, kind, coords, color: DEFAULT_COLORS[kind] };
     this.features.push(f);
     this.addEntity(f);
     this.persist();
@@ -280,39 +380,77 @@ export class Places {
 
   private addEntity(f: Feature): Entity {
     const color = Color.fromCssColorString(f.color);
-    const positions = f.coords.map(([lon, lat]) => Cartesian3.fromDegrees(lon, lat));
-    const anchor = f.kind === 'line' ? f.coords[Math.floor(f.coords.length / 2)] : centroid(f.coords);
+    const heights = this.heightsFor(f);
+    const raised = !!heights;
+    const positions = f.coords.map(([lon, lat], i) => Cartesian3.fromDegrees(lon, lat, heights?.[i] ?? 0));
+    const [anchorLon, anchorLat] = f.kind === 'line' ? f.coords[Math.floor(f.coords.length / 2)] : centroid(f.coords);
+    const anchorHeight = heights
+      ? f.kind === 'line'
+        ? heights[Math.floor(f.coords.length / 2)]
+        : heights.reduce((a, b) => a + b, 0) / heights.length
+      : 0;
     const notes = f.description ? `<p>${escapeHtml(f.description).replace(/\n/g, '<br>')}</p>` : '';
+    const heightReference = raised ? HeightReference.NONE : HeightReference.CLAMP_TO_GROUND;
+    const icon = f.kind === 'point' && f.icon && f.icon !== 'dot' ? f.icon : undefined;
+    const ring = f.kind === 'polygon' ? [...positions, positions[0]] : positions;
 
     return this.source.entities.add({
       id: f.id,
       name: f.name,
       show: this.isShown(f),
       description: `${notes}<p style="color:#5f6b7a">${escapeHtml(measure(f))}</p>`,
-      position: Cartesian3.fromDegrees(...anchor),
+      position: Cartesian3.fromDegrees(anchorLon, anchorLat, anchorHeight),
       point:
-        f.kind === 'point'
+        f.kind === 'point' && !icon
           ? {
               pixelSize: 11,
               color,
               outlineColor: Color.BLACK,
               outlineWidth: 1.5,
-              heightReference: HeightReference.CLAMP_TO_GROUND,
+              heightReference,
               disableDepthTestDistance: Number.POSITIVE_INFINITY,
             }
           : undefined,
+      billboard: icon
+        ? {
+            image: placemarkIcon(icon, f.color),
+            width: 30,
+            height: 30,
+            verticalOrigin: BOTTOM_ANCHORED.includes(icon) ? VerticalOrigin.BOTTOM : VerticalOrigin.CENTER,
+            heightReference,
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          }
+        : undefined,
       polyline:
         f.kind === 'point'
-          ? undefined
+          ? raised && f.extrude
+            ? {
+                // A placemark's line down to the ground.
+                positions: [Cartesian3.fromDegrees(anchorLon, anchorLat, 0), positions[0]],
+                arcType: ArcType.NONE,
+                width: 1.5,
+                material: Color.WHITE.withAlpha(0.8),
+              }
+            : undefined
           : {
-              positions: f.kind === 'polygon' ? [...positions, positions[0]] : positions,
+              positions: ring,
               width: f.width ?? DEFAULT_WIDTH,
               material: color,
-              clampToGround: true,
+              clampToGround: !raised,
             },
       polygon:
         f.kind === 'polygon'
-          ? { hierarchy: new PolygonHierarchy(positions), material: color.withAlpha(f.fillOpacity ?? DEFAULT_FILL) }
+          ? {
+              hierarchy: new PolygonHierarchy(positions),
+              material: color.withAlpha(f.fillOpacity ?? DEFAULT_FILL),
+              perPositionHeight: raised,
+              // Extruding to height 0 runs the sides down into the terrain, which hides the rest.
+              extrudedHeight: raised && f.extrude ? 0 : undefined,
+            }
+          : undefined,
+      wall:
+        f.kind === 'line' && raised && f.extrude
+          ? { positions, minimumHeights: positions.map(() => 0), material: color.withAlpha(f.fillOpacity ?? DEFAULT_FILL) }
           : undefined,
       label: {
         text: f.name,
@@ -321,8 +459,8 @@ export class Places {
         outlineWidth: 3,
         outlineColor: Color.BLACK,
         verticalOrigin: VerticalOrigin.BOTTOM,
-        pixelOffset: new Cartesian2(0, f.kind === 'point' ? -12 : 0),
-        heightReference: HeightReference.CLAMP_TO_GROUND,
+        pixelOffset: new Cartesian2(0, f.kind !== 'point' ? 0 : icon && BOTTOM_ANCHORED.includes(icon) ? -32 : -14),
+        heightReference,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
       },
     });
@@ -455,7 +593,14 @@ export class Places {
 
     const icon = document.createElement('span');
     icon.className = 'kind-icon';
-    icon.textContent = KIND_ICONS[f.kind];
+    if (f.kind === 'point' && f.icon && f.icon !== 'dot') {
+      const img = document.createElement('img');
+      img.src = placemarkIcon(f.icon, f.color);
+      img.alt = '';
+      icon.append(img);
+    } else {
+      icon.textContent = KIND_ICONS[f.kind];
+    }
     icon.style.color = f.color;
 
     const name = document.createElement('span');
@@ -463,13 +608,7 @@ export class Places {
     name.textContent = f.name;
     name.addEventListener('dblclick', () => this.onEdit?.(f.id));
 
-    const go = button('Go', 'Fly here', () => {
-      if (f.kind === 'point') {
-        this.viewer.camera.flyTo({ destination: Cartesian3.fromDegrees(...f.coords[0], 2500) });
-      } else {
-        void this.viewer.flyTo(this.entity(f.id)!);
-      }
-    });
+    const go = button('Go', f.view ? 'Fly to the saved view' : 'Fly here', () => this.flyTo(f));
     const edit = button('✎', 'Properties (edit name, style, shape)', () => this.onEdit?.(f.id));
     li.append(visible, icon, name, go, edit);
     if (f.kind === 'line') {

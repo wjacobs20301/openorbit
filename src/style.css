@@ -569,6 +569,74 @@ button.primary { background: var(--accent); color: var(--accent-text); border-co
 .drop-here { outline: 2px dashed var(--accent); outline-offset: 2px; border-radius: 4px; }
 #placemark-list li[draggable='true'] { cursor: grab; }
 
+/* ---- Properties: icon, altitude, view */
+.icon-picker { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 8px; }
+.icon-picker button { padding: 2px; width: 30px; height: 30px; display: grid; place-items: center; }
+.icon-picker button.active { outline: 2px solid var(--accent); outline-offset: -1px; }
+.icon-picker img { width: 22px; height: 22px; }
+.kind-icon img { width: 14px; height: 14px; vertical-align: -2px; }
+fieldset.altitude { border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px 8px; margin: 0 0 8px; }
+fieldset.altitude legend { color: var(--muted); padding: 0 4px; }
+fieldset.altitude .field { margin-bottom: 0; }
+fieldset.altitude select { margin-bottom: 6px; }
+fieldset.altitude .row { align-items: flex-end; }
+fieldset.altitude .check { flex: 1.3; padding-bottom: 6px; }
+#edit-panel input[type='checkbox'] { width: auto; }
+.view-row { align-items: center; margin-bottom: 8px; }
+
+li.failed .tree-name { color: #d93025; }
+#kml-time-bar { top: auto; bottom: 40px; }
+#kml-time-bar .play { width: 32px; }
+#app:has(#sun-bar:not([hidden])) #kml-time-bar { bottom: 112px; }
+
+/* ---- Save Image */
+#image-bar {
+  top: 0; left: 0; right: 0; width: auto; transform: none; border-radius: 0;
+  height: var(--image-bar-h); display: flex; flex-direction: column; justify-content: center; gap: 6px; z-index: 5;
+  background: rgb(32 36 41 / 0.97); box-shadow: none;
+}
+#app { --image-bar-h: 104px; }
+#image-bar[hidden] { display: none; }
+#app.saving-image #globe .cesium-viewer { top: var(--image-bar-h); height: auto; }
+#app.saving-image #image-preview { top: var(--image-bar-h); }
+#app.saving-image #nav-controls, #app.saving-image #scale-legend { display: none; }
+#image-bar .title { width: 180px; font-weight: 600; }
+#image-bar .grow { flex: 1; }
+#image-bar .options { gap: 14px; flex-wrap: wrap; }
+#image-bar select { background: rgb(255 255 255 / 0.1); color: inherit; border-color: rgb(255 255 255 / 0.25); margin-left: auto; }
+#image-bar .status { color: #cfd6de; }
+#image-preview { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 2; }
+#image-preview[hidden] { display: none; }
+#print-image { display: none; }
+@media print {
+  body:has(#print-image) > :not(#print-image) { display: none !important; }
+  #print-image { display: block; max-width: 100%; max-height: 100vh; margin: auto; }
+}
+
+/* ---- Overview map */
+#overview-map {
+  position: absolute;
+  right: 10px;
+  bottom: 34px;
+  z-index: 2;
+  border: 2px solid rgb(255 255 255 / 0.8);
+  border-radius: 4px;
+  box-shadow: 0 2px 10px rgb(0 0 0 / 0.45);
+  cursor: crosshair;
+}
+#overview-map[hidden] { display: none; }
+
+/* ---- Ruler */
+.ruler { left: auto; right: 110px; width: 260px; }
+.ruler .row:first-child { justify-content: space-between; }
+.ruler .close { border: 0; background: none; font-size: 18px; line-height: 1; padding: 0 4px; color: var(--muted); }
+.tabs { display: flex; gap: 2px; margin-bottom: 10px; border-bottom: 1px solid var(--border); }
+.tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 4px 8px; color: var(--muted); }
+.tabs button.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+.ruler dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0 0 8px; }
+.ruler dt { color: var(--muted); }
+.ruler dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+
 /* ---- Tours */
 #tour-bar {
   position: absolute;

@@ -71,6 +71,32 @@ fn percent_decode(s: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
+/// Fetches a KML network link (or other web data) without the browser's cross-origin
+/// rules, which most KML feeds don't allow for. Only http and https are fetched.
+#[tauri::command]
+async fn fetch_url(url: String) -> Result<tauri::ipc::Response, String> {
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        return Err("Only http and https links can be fetched".into());
+    }
+    let client = reqwest::Client::builder()
+        .user_agent(tile_cache::USER_AGENT)
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let response = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    if !response.status().is_success() {
+        return Err(format!("HTTP {}", response.status().as_u16()));
+    }
+    let bytes = response.bytes().await.map_err(|e| e.to_string())?;
+    Ok(tauri::ipc::Response::new(bytes.to_vec()))
+}
+
+/// Opens the system print dialog for the page (File › Print). WKWebView ignores window.print().
+#[tauri::command]
+fn print_view(webview: tauri::Webview) -> Result<(), String> {
+    webview.print().map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn clear_tile_cache(cache: tauri::State<'_, TileCache>) -> Result<usize, String> {
     cache.clear().map_err(|e| e.to_string())
@@ -97,6 +123,8 @@ pub fn run() {
             write_text_file,
             write_png_file,
             write_binary_file,
+            fetch_url,
+            print_view,
             clear_tile_cache
         ])
         .run(tauri::generate_context!())

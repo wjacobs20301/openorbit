@@ -34,16 +34,7 @@ export function polygonArea(points: LonLat[]): number {
   return Math.abs((sum * EARTH_RADIUS * EARTH_RADIUS) / 2);
 }
 
-export function formatDistance(m: number): string {
-  return m >= 1000
-    ? `${(m / 1000).toFixed(2)} km (${(m / 1609.344).toFixed(2)} mi)`
-    : `${m.toFixed(1)} m (${(m * 3.28084).toFixed(0)} ft)`;
-}
-
-export function formatArea(m2: number): string {
-  if (m2 >= 1e6) return `${(m2 / 1e6).toFixed(2)} km² (${(m2 / 2589988.11).toFixed(2)} sq mi)`;
-  return `${(m2 / 1e4).toFixed(2)} ha (${(m2 / 4046.856).toFixed(2)} acres)`;
-}
+export { formatArea, formatDistance } from './units';
 
 /** A point to hang a label on: the vertex average, good enough for typical shapes. */
 export function centroid(points: LonLat[]): LonLat {

@@ -110,3 +110,21 @@ export function storeSetting(key: string, value: string): void {
     // Storage can be unavailable (private mode); settings then last for the session only.
   }
 }
+
+/**
+ * Downloads web data such as a KML network link. The desktop app fetches it natively,
+ * since most feeds don't allow cross-origin requests from a web page.
+ */
+export async function fetchBytes(url: string): Promise<ArrayBuffer> {
+  if (isDesktop) return invoke<ArrayBuffer>('fetch_url', { url });
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.arrayBuffer();
+}
+
+/** Runs a desktop-only command; returns false in the browser. */
+export async function invokeIfDesktop(command: string): Promise<boolean> {
+  if (!isDesktop) return false;
+  await invoke(command);
+  return true;
+}

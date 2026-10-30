@@ -71,6 +71,7 @@
             <div id="my-places-root" class="tree-folder" title="Drop places here to take them out of a folder">📁 My Places</div>
             <ul id="placemark-list" class="list tree-children"></ul>
             <ul id="kept-list" class="list tree-children"></ul>
+            <ul id="network-list" class="list tree-children" title="Network links"></ul>
             <ul id="overlay-list" class="list tree-children" title="Image overlays"></ul>
             <ul id="tour-list" class="list tree-children" title="Tours: double-click a name to rename"></ul>
             <div class="tree-folder">📁 Temporary Places</div>
@@ -139,6 +140,25 @@
         <button aria-label="Close">&times;</button>
       </form>
       <section>
+        <h3>Units</h3>
+        <div class="row">
+          <label class="field">Distances and heights
+            <select id="units">
+              <option value="metric">Metres and kilometres</option>
+              <option value="imperial">Feet and miles</option>
+            </select>
+          </label>
+          <label class="field">Show latitude and longitude as
+            <select id="coord-format">
+              <option value="dms">Degrees, minutes, seconds</option>
+              <option value="dm">Degrees, decimal minutes</option>
+              <option value="decimal">Decimal degrees</option>
+              <option value="utm">Universal Transverse Mercator</option>
+            </select>
+          </label>
+        </div>
+      </section>
+      <section>
         <h3>Start location</h3>
         <div class="row">
           <button id="make-start" type="button">Make this view my start location</button>
@@ -174,6 +194,34 @@
         </div>
         <p id="offline-status" class="hint">Places you've already viewed are saved automatically.</p>
       </section>
+    </dialog>
+
+    <dialog id="network-dialog">
+      <form method="dialog">
+        <div class="dialog-head">
+          <h2>New Network Link</h2>
+          <button value="cancel" formnovalidate aria-label="Close">&times;</button>
+        </div>
+        <section>
+          <label class="field">Name <input name="name" placeholder="Optional" /></label>
+          <label class="field">Link <input name="url" type="url" required placeholder="https://example.com/feed.kml" /></label>
+          <label class="field">Refresh
+            <select name="refresh">
+              <option value="0">Load once (refresh by hand with ↻)</option>
+              <option value="30">Every 30 seconds</option>
+              <option value="60">Every minute</option>
+              <option value="300" selected>Every 5 minutes</option>
+              <option value="900">Every 15 minutes</option>
+              <option value="3600">Every hour</option>
+            </select>
+          </label>
+          <p class="hint">A KML or KMZ file on the web, such as a live earthquake or flight feed.</p>
+          <div class="row end">
+            <button value="cancel" formnovalidate>Cancel</button>
+            <button value="add" class="primary">Add</button>
+          </div>
+        </section>
+      </form>
     </dialog>
 
     <dialog id="shortcuts-dialog">

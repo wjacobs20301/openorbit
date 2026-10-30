@@ -37,6 +37,17 @@ Google Earth Pro. It reads public map data directly, so the project runs no serv
 - Right-click the globe: What's here?, add a placemark, street view, measure, centre the
   view, copy coordinates
 - Undo after deleting a place, folder, image overlay or tour; Find in Places filter box
+- Units (metres or feet) and coordinates as degrees-minutes-seconds, decimal minutes,
+  decimal degrees or UTM (Settings)
+- Ruler with Line, Path, Polygon and Circle tabs (ground length, heading, area); Save keeps
+  the measurement in My Places
+- Placemark icons, Google Earth's Altitude settings (clamped, relative to ground, absolute,
+  extend to ground) and "Snapshot current view" for Go
+- Time slider for KML with dates (TimeStamp/TimeSpan): drag, play, or show all
+- Network links (Add › Network Link): KML/KMZ from the web, refreshed on a timer
+- Save Image with title, description, legend, compass and scale, up to 8K; Copy Image; Print
+- Latitude/longitude grid (View › Grid, ⌘L) and an overview map (View › Overview Map)
+- CSV files with address columns instead of coordinates are looked up automatically
 - Distance measuring
 - Street-level photos: Panoramax (no key), Mapillary (optional token), and a one-click
   "Open in Google Street View" button

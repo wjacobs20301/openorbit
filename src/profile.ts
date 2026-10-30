@@ -10,6 +10,7 @@ import {
   type Viewer,
 } from 'cesium';
 import { formatDistance } from './geometry';
+import { formatHeight } from './units';
 
 /** Samples along the line; enough for a smooth chart without many terrain requests. */
 const SAMPLES = 240;
@@ -137,8 +138,8 @@ export class ElevationProfile {
       if (run > 0) steepest = Math.max(steepest, Math.abs(dh / run));
     }
     this.stats.textContent =
-      `${formatDistance(total)} · ${Math.round(min)}–${Math.round(max)} m · ` +
-      `climb ${Math.round(gain)} m, descent ${Math.round(loss)} m · steepest ${(steepest * 100).toFixed(0)}%`;
+      `${formatDistance(total)} · ${formatHeight(min)} to ${formatHeight(max)} · ` +
+      `climb ${formatHeight(gain)}, descent ${formatHeight(loss)} · steepest ${(steepest * 100).toFixed(0)}%`;
 
     // Scale with a little headroom so flat lines don't hug the edges.
     const pad = Math.max(10, (max - min) * 0.1);
@@ -151,7 +152,7 @@ export class ElevationProfile {
       <path d="${line}L${CHART_W},${CHART_H}L0,${CHART_H}Z" class="profile-area" />
       <path d="${line}" class="profile-line" vector-effect="non-scaling-stroke" />
       <line class="profile-cursor" y1="0" y2="${CHART_H}" vector-effect="non-scaling-stroke" visibility="hidden" />`;
-    this.readout.textContent = `${Math.round(max)} m\n\n${Math.round(min)} m`;
+    this.readout.textContent = `${formatHeight(max)}\n\n${formatHeight(min)}`;
   }
 
   /** Marks the hovered point on the chart and on the map. */
@@ -168,7 +169,7 @@ export class ElevationProfile {
     cursor.setAttribute('x1', String(share * CHART_W));
     cursor.setAttribute('x2', String(share * CHART_W));
     cursor.setAttribute('visibility', 'visible');
-    this.readout.textContent = `${formatDistance(sample.along)}\n${Math.round(sample.height)} m`;
+    this.readout.textContent = `${formatDistance(sample.along)}\n${formatHeight(sample.height)}`;
 
     const position = Cartographic.toCartesian(sample.carto);
     if (this.marker) this.marker.position = position as never;

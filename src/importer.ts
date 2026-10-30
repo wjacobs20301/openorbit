@@ -13,6 +13,8 @@ import {
   type Viewer,
 } from 'cesium';
 import { forgetFiles, keepFiles, keptFiles } from './keptfiles';
+import { loadSetting, storeSetting } from './platform';
+import { geocoder } from './sources';
 
 /** File types the import button accepts. */
 export const IMPORT_ACCEPT = '.kml,.kmz,.geojson,.json,.gpx,.csv,.zip,.shp,.dbf,.prj,.cpg';
@@ -34,13 +36,21 @@ async function geoJson(data: object, name: string, files: File[]): Promise<Impor
   return { source, name, files };
 }
 
-/** Reads CSV with latitude/longitude columns (lat, latitude, y / lon, lng, longitude, x). */
-export function csvToGeoJson(text: string): FeatureCollection {
+/** Address columns, in the order they're joined into a search. */
+const ADDRESS_COLUMNS = ['address', 'street', 'address1', 'address 1', 'street address', 'city', 'town', 'state', 'province', 'region', 'zip', 'postcode', 'postal code', 'country'];
+/** Most addresses looked up from one file, to stay within the free geocoder's fair use. */
+const MAX_GEOCODE = 500;
+
+/**
+ * Reads CSV with latitude/longitude columns (lat, latitude, y / lon, lng, longitude, x),
+ * or failing that, address columns, which are looked up one by one (as Google Earth Pro does).
+ */
+export async function csvToGeoJson(text: string, onProgress?: (text: string) => void): Promise<FeatureCollection> {
   const rows = parseCsv(text.replace(/^﻿/, ''));
   const header = rows.shift()?.map((h) => h.trim().toLowerCase()) ?? [];
   const latCol = header.findIndex((h) => ['lat', 'latitude', 'y'].includes(h));
   const lonCol = header.findIndex((h) => ['lon', 'lng', 'long', 'longitude', 'x'].includes(h));
-  if (latCol < 0 || lonCol < 0) throw new Error('CSV needs latitude and longitude columns');
+  if (latCol < 0 || lonCol < 0) return geocodeCsv(header, rows, onProgress);
 
   const features = rows
     .filter((r) => r.length > Math.max(latCol, lonCol))
@@ -51,6 +61,64 @@ export function csvToGeoJson(text: string): FeatureCollection {
     }))
     .filter((f) => f.geometry.coordinates.every(Number.isFinite));
   return { type: 'FeatureCollection', features };
+}
+
+async function geocodeCsv(header: string[], rows: string[][], onProgress?: (text: string) => void): Promise<FeatureCollection> {
+  const columns = ADDRESS_COLUMNS.map((name) => header.indexOf(name)).filter((i) => i >= 0);
+  if (!columns.length) throw new Error('CSV needs latitude and longitude columns, or address columns (address, city, country…)');
+  const todo = rows.slice(0, MAX_GEOCODE);
+  const features: unknown[] = [];
+  let missed = 0;
+  for (const [n, r] of todo.entries()) {
+    onProgress?.(`Finding addresses… ${n + 1} of ${todo.length}`);
+    const query = columns.map((i) => r[i]?.trim()).filter(Boolean).join(', ');
+    const found = query ? await lookUp(query) : undefined;
+    if (!found) {
+      missed++;
+      continue;
+    }
+    features.push({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: found },
+      properties: Object.fromEntries(header.map((h, i) => [h, r[i]])),
+    });
+  }
+  const skipped = rows.length - todo.length;
+  onProgress?.(
+    [missed && `${missed} address${missed === 1 ? '' : 'es'} not found.`, skipped && `Only the first ${MAX_GEOCODE} rows were looked up.`]
+      .filter(Boolean)
+      .join(' '),
+  );
+  return { type: 'FeatureCollection', features };
+}
+
+/** Addresses already looked up, so kept files reopen without asking the geocoder again. */
+const geocoded: Record<string, [number, number]> = (() => {
+  try {
+    return JSON.parse(loadSetting('geocodeCache') || '{}');
+  } catch {
+    return {};
+  }
+})();
+
+/** The first match for an address from the geocoder, as [lon, lat]. */
+async function lookUp(query: string): Promise<[number, number] | undefined> {
+  if (geocoded[query]) return geocoded[query];
+  try {
+    const response = await fetch(`${geocoder.url}?q=${encodeURIComponent(query)}&limit=1`);
+    const data = (await response.json()) as { features: { geometry: { coordinates: [number, number] } }[] };
+    const found = data.features[0]?.geometry.coordinates;
+    if (found) {
+      geocoded[query] = found;
+      // Keep the most recent few thousand.
+      const keys = Object.keys(geocoded);
+      for (const k of keys.slice(0, Math.max(0, keys.length - 3000))) delete geocoded[k];
+      storeSetting('geocodeCache', JSON.stringify(geocoded));
+    }
+    return found;
+  } catch {
+    return undefined;
+  }
 }
 
 function parseCsv(text: string): string[][] {
@@ -88,7 +156,7 @@ function parseCsv(text: string): string[][] {
  * lines that have <tessellate>; others (common in exported files) are drawn at sea level
  * and vanish under hills. Anything with real heights in its coordinates keeps them.
  */
-function dropToGround(source: DataSource): void {
+export function dropToGround(source: DataSource): void {
   const now = JulianDate.now();
   const outlines: Entity.ConstructorOptions[] = [];
   const flat = (positions: Cartesian3[] | undefined) =>
@@ -166,7 +234,7 @@ const base = (f: File) => f.name.replace(/\.[^.]+$/, '');
  * Turns the selected files into data sources. Shapefile parts (.shp/.dbf/.prj/.cpg)
  * picked together are combined by name; a zipped shapefile works on its own.
  */
-async function load(files: File[], viewer: Viewer): Promise<Imported[]> {
+async function load(files: File[], viewer: Viewer, onProgress?: (text: string) => void): Promise<Imported[]> {
   const out: Imported[] = [];
   const shapeParts = new Map<string, Partial<Record<'shp' | 'dbf' | 'prj' | 'cpg', File>>>();
 
@@ -183,7 +251,7 @@ async function load(files: File[], viewer: Viewer): Promise<Imported[]> {
       const source = await GpxDataSource.load(file, { clampToGround: true });
       out.push({ source, name: source.name || file.name, files: [file] });
     } else if (kind === 'csv') {
-      out.push(await geoJson(csvToGeoJson(await file.text()), file.name, [file]));
+      out.push(await geoJson(await csvToGeoJson(await file.text(), onProgress), file.name, [file]));
     } else if (kind === 'zip') {
       const { default: shp } = await import('shpjs');
       const parsed = (await shp(await file.arrayBuffer())) as FeatureCollection | FeatureCollection[];
@@ -253,7 +321,11 @@ export function setupImport(viewer: Viewer): { openFiles(files: File[]): Promise
     if (!files.length) return;
     status.textContent = 'Importing…';
     try {
-      const imported = await load(files, viewer);
+      let note = '';
+      const imported = await load(files, viewer, (text) => {
+        status.textContent = text;
+        note = text.startsWith('Finding') ? '' : ` ${text}`;
+      });
       for (const item of imported) {
         await viewer.dataSources.add(item.source);
         // Opened files go to Temporary Places, as in Google Earth; Keep moves them to My Places.
@@ -264,7 +336,7 @@ export function setupImport(viewer: Viewer): { openFiles(files: File[]): Promise
         list.append(li);
       }
       const count = imported.reduce((n, i) => n + i.source.entities.values.length, 0);
-      status.textContent = `Imported ${count.toLocaleString()} features.`;
+      status.textContent = `Imported ${count.toLocaleString()} features.${note}`;
       if (imported.length) void viewer.flyTo(imported[0].source);
     } catch (err) {
       status.textContent = `Import failed: ${(err as Error).message}`;
@@ -340,6 +412,7 @@ function listItem(viewer: Viewer, ds: DataSource, label: string, onKeep?: () => 
   toggle.checked = true;
   toggle.addEventListener('change', () => (ds.show = toggle.checked));
   const name = document.createElement('span');
+  name.className = 'tree-name';
   name.textContent = label;
   name.title = `${ds.entities.values.length.toLocaleString()} features`;
   const go = document.createElement('button');

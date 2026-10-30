@@ -1,17 +1,5 @@
 import { Math as CesiumMath, type Viewer } from 'cesium';
-import { openExternal, savePngFile } from './platform';
-
-/**
- * Captures the globe as a PNG. The WebGL canvas is only readable in the same task that
- * drew it, so this draws a frame and reads it straight away.
- */
-export async function saveImage(viewer: Viewer): Promise<void> {
-  viewer.scene.requestRender();
-  viewer.render();
-  const png = await (await fetch(viewer.canvas.toDataURL('image/png'))).blob();
-  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-  await savePngFile(`OpenOrbit ${stamp}.png`, png);
-}
+import { openExternal } from './platform';
 
 /** The camera as latitude, longitude, altitude (m), heading and tilt (degrees). */
 function cameraView(viewer: Viewer) {
