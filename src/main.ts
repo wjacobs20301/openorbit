@@ -56,6 +56,7 @@ import { NetworkLinks } from './networklinks';
 import { setupTimeBar } from './timebar';
 import { Grid } from './grid';
 import { trackHorizon } from './ontop';
+import { setupUpdates } from './updates';
 import { OverviewMap } from './overviewmap';
 
 type Tool = 'placemark' | 'path' | 'polygon' | 'measure' | 'street' | null;
@@ -154,6 +155,7 @@ const importer = setupImport(viewer);
 setupPlacesFilter();
 setupTimeBar(viewer);
 const networkLinks = new NetworkLinks(viewer);
+const updates = setupUpdates((text) => (hint.textContent = text));
 const imageSaver = new ImageSaver(viewer, () => places.legend(), (text) => (hint.textContent = text));
 setupOffline(viewer);
 
@@ -501,6 +503,10 @@ const actions: AppActions = {
   },
   settings: () => settingsDialog.showModal(),
   shortcuts: () => shortcutsDialog.showModal(),
+  checkForUpdates: () => {
+    hint.textContent = 'Checking for updates…';
+    void updates.check();
+  },
   addPlacemark: () => setTool('placemark'),
   addPath: () => setTool('path'),
   addPolygon: () => setTool('polygon'),
@@ -664,6 +670,10 @@ const googleKeyInput = document.querySelector<HTMLInputElement>('#google-key')!;
 googleKeyInput.value = loadSetting('googleKey');
 googleKeyInput.addEventListener('change', () => storeSetting('googleKey', googleKeyInput.value.trim()));
 
+document.querySelector('#check-updates')!.addEventListener('click', () => {
+  settingsDialog.close();
+  actions.checkForUpdates();
+});
 document.querySelector('#make-start')!.addEventListener('click', () => {
   settingsDialog.close();
   actions.makeStartLocation();

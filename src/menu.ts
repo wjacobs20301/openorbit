@@ -19,6 +19,7 @@ export interface AppActions {
   find(): void;
   settings(): void;
   shortcuts(): void;
+  checkForUpdates(): void;
   addPlacemark(): void;
   addPath(): void;
   addPolygon(): void;
@@ -70,6 +71,7 @@ export async function setupMenu(a: AppActions): Promise<() => void> {
     text: 'OpenOrbit',
     items: [
       await PredefinedMenuItem.new({ item: { About: { name: 'OpenOrbit' } } }),
+      await item('Check for Updates…', a.checkForUpdates),
       await separator(),
       await item('Settings…', a.settings, 'CmdOrCtrl+,'),
       await separator(),

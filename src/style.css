@@ -458,6 +458,27 @@ input[type='range'] { padding: 0; accent-color: var(--accent); }
 #places-filter { width: 100%; margin: 0 0 6px; }
 .tree li[hidden] { display: none; }
 
+/* ---- Update notice */
+#update-notice {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 7;
+  width: min(340px, calc(100% - 24px));
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.35);
+}
+#update-notice[hidden] { display: none; }
+#update-notice span { color: var(--muted); }
+#update-notice .row { margin-top: 6px; gap: 6px; }
+
 /* ---- Undo message */
 #undo-toast {
   position: absolute;

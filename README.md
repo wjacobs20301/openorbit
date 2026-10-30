@@ -48,6 +48,7 @@ Google Earth Pro. It reads public map data directly, so the project runs no serv
 - Save Image with title, description, legend, compass and scale, up to 8K; Copy Image; Print
 - Latitude/longitude grid (View › Grid, ⌘L) and an overview map (View › Overview Map)
 - CSV files with address columns instead of coordinates are looked up automatically
+- Tells you when a new version is out on GitHub (daily check, or Help › Check for Updates)
 - Distance measuring
 - Street-level photos: Panoramax (no key), Mapillary (optional token), and a one-click
   "Open in Google Street View" button
