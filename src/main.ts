@@ -23,10 +23,20 @@ import { setupNavControls } from './navcontrols';
 import { setupOffline } from './offline';
 import { addVectorOverlays } from './overlay';
 import { Pegman } from './pegman';
+import { groundOverlayKml, ImageOverlays } from './imageoverlay';
+import { zip } from './kmz';
 import { Places } from './places';
 import { ElevationProfile } from './profile';
 import { PlaceEditor } from './editor';
-import { clearTileCache, isDesktop, isTyping, loadSetting, storeSetting } from './platform';
+import {
+  clearTileCache,
+  isDesktop,
+  isTyping,
+  loadSetting,
+  saveBinaryFile,
+  saveTextFile,
+  storeSetting,
+} from './platform';
 import { setupSearch } from './search';
 import { setupScaleLegend } from './scale';
 import { setupStartView } from './startview';
@@ -90,10 +100,20 @@ tours.onRecordingChange = (on) => {
   document.querySelector('[data-action="record-tour"]')?.classList.toggle('recording', on);
   hint.textContent = on ? 'Recording: fly around, then press Stop.' : '';
 };
-balloon.canEdit = (entity) => !!places.get(entity.id);
-balloon.onEdit = (entity) => editor.open(entity.id);
+balloon.canEdit = (entity) => !!places.get(entity.id) || !!imageOverlays.get(entity.id);
+balloon.onEdit = (entity) => (imageOverlays.get(entity.id) ? imageOverlays.edit(entity.id) : editor.open(entity.id));
 places.onProfile = (name, positions) => void profile.show(name, positions);
 const editor = new PlaceEditor(viewer, places);
+const imageOverlays = new ImageOverlays(viewer);
+// With image overlays, My Places is saved as a KMZ so the pictures travel with it.
+places.onExport = async () => {
+  const items = await imageOverlays.exportable();
+  if (!items.length) return saveTextFile('My Places.kml', places.kml());
+  const ext = (type: string) => ({ 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' })[type] ?? 'png';
+  const files = items.map(({ overlay, image }) => ({ name: `files/${overlay.id}.${ext(overlay.type)}`, data: image }));
+  const kml = places.kml(items.map(({ overlay }, i) => groundOverlayKml(overlay, files[i].name)).join('\n'));
+  await saveBinaryFile('My Places.kmz', await zip([{ name: 'doc.kml', data: kml }, ...files]), 'kmz');
+};
 places.onEdit = (id) => editor.open(id);
 const drawer = new Drawer(
   viewer,
@@ -114,7 +134,7 @@ setupImport(viewer);
 setupOffline(viewer);
 
 // Handy for poking at the scene from devtools during development.
-if (import.meta.env.DEV) Object.assign(window, { viewer });
+if (import.meta.env.DEV) Object.assign(window, { viewer, imageOverlays });
 
 // ---- Tools (toolbar buttons with data-tool): one at a time; clicking again turns it off.
 const hints: Record<Exclude<Tool, null>, string> = {
@@ -144,6 +164,7 @@ document.addEventListener('keydown', (e) => {
     setTool(null);
     balloon.close();
     if (editor.active && !isTyping(e)) editor.close(false);
+    if (imageOverlays.active && !isTyping(e)) imageOverlays.close(false);
   }
   // Leave typing in sidebar fields alone.
   if (!drawer.kind || isTyping(e)) return;
@@ -162,7 +183,7 @@ handler.setInputAction(({ position }: ScreenSpaceEventHandler.PositionedEvent) =
   // With no tool active, a click shows the details of whatever feature is under it.
   if (!tool) {
     // While editing, clicks go to the editor's handles instead.
-    if (!editor.active) balloon.openAt(position);
+    if (!editor.active && !imageOverlays.active) balloon.openAt(position);
     return;
   }
   const ground = pickGround(viewer, position);
@@ -391,6 +412,7 @@ const actions: AppActions = {
   googleMaps: () => void openInGoogleMaps(viewer),
   googleEarthWeb: () => void openInGoogleEarthWeb(viewer),
   recordTour: () => tours.toggleRecording(),
+  addImageOverlay: () => imageOverlays.choose(),
   playTour: () => {
     toggles.sidebar.set(true);
     document.querySelector<HTMLDetailsElement>('[data-panel="places"]')!.open = true;
@@ -436,6 +458,7 @@ const toolbarActions: Record<string, () => void> = {
   sun: () => toggles.sun.set(!sunCtl.open),
   'save-image': actions.saveImage,
   'record-tour': () => tours.toggleRecording(),
+  'image-overlay': () => imageOverlays.choose(),
   'google-maps': actions.googleMaps,
   settings: actions.settings,
 };

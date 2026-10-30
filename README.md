@@ -28,6 +28,8 @@ Google Earth Pro. It reads public map data directly, so the project runs no serv
   with drag and drop; Cancel undoes (or deletes a just-created place)
 - Elevation profile for paths and lines (distance, elevation range, climb, steepest grade)
 - Opens where you left off, or at a start location you set; scale legend
+- Image overlays (Add Image Overlay): drape a picture such as a site plan on the terrain,
+  then move, stretch, rotate and set its opacity; saved in My Places, exported as KMZ
 - Tours: Record a Tour from the toolbar, or fly along any path or line; play them back
   with a scrubber, speed and loop (Space plays/pauses); save a tour as an MP4/WebM video
 - Layer checkboxes and View options are remembered between sessions

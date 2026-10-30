@@ -56,7 +56,7 @@ export async function savePngFile(defaultName: string, blob: Blob): Promise<void
 }
 
 /**
- * Saves a large file (e.g. a video) with a native "Save as" dialog on desktop, or a
+ * Saves a large file (a video or KMZ) with a native "Save as" dialog on desktop, or a
  * download in the browser. Desktop sends the bytes raw rather than as JSON.
  */
 export async function saveBinaryFile(defaultName: string, blob: Blob, ext: string): Promise<void> {
@@ -64,7 +64,7 @@ export async function saveBinaryFile(defaultName: string, blob: Blob, ext: strin
     const { save } = await import('@tauri-apps/plugin-dialog');
     const path = await save({ defaultPath: defaultName, filters: [{ name: ext.toUpperCase(), extensions: [ext] }] });
     if (path) {
-      await invoke('write_media_file', new Uint8Array(await blob.arrayBuffer()), {
+      await invoke('write_binary_file', new Uint8Array(await blob.arrayBuffer()), {
         headers: { 'x-path': encodeURIComponent(path) },
       });
     }
@@ -79,6 +79,15 @@ export async function saveBinaryFile(defaultName: string, blob: Blob, ext: strin
 
 export async function clearTileCache(): Promise<number> {
   return isDesktop ? invoke<number>('clear_tile_cache') : 0;
+}
+
+/**
+ * Re-enables map dragging after a handle drag. Cesium still tracks a drag while the
+ * camera is locked and would replay it as a flick with momentum the moment it's
+ * unlocked, so unlocking waits until that momentum has expired.
+ */
+export function unlockCameraSoon(controller: { enableInputs: boolean }): void {
+  window.setTimeout(() => (controller.enableInputs = true), 300);
 }
 
 /** True when a key press is going into a text field, so global shortcuts should ignore it. */

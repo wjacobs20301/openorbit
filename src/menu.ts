@@ -11,6 +11,7 @@ export interface AppActions {
   elevationProfile(): void;
   makeStartLocation(): void;
   recordTour(): void;
+  addImageOverlay(): void;
   playTour(): void;
   find(): void;
   settings(): void;
@@ -156,6 +157,7 @@ export async function setupMenu(a: AppActions): Promise<() => void> {
       await item('Placemark', a.addPlacemark, 'Shift+CmdOrCtrl+P'),
       await item('Path', a.addPath, 'Shift+CmdOrCtrl+T'),
       await item('Polygon', a.addPolygon, 'Shift+CmdOrCtrl+G'),
+      await item('Image Overlay…', a.addImageOverlay, 'Shift+CmdOrCtrl+O'),
       await separator(),
       await item('Tour (Record)', a.recordTour),
     ],

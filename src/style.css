@@ -468,7 +468,7 @@ input[type='range'] { padding: 0; accent-color: var(--accent); }
 .balloon iframe { display: block; width: 100%; border: 0; height: 0; }
 
 /* ---- Properties (edit) window */
-#edit-panel {
+#edit-panel, .edit-window {
   position: absolute;
   top: 10px;
   left: 10px;
@@ -483,11 +483,12 @@ input[type='range'] { padding: 0; accent-color: var(--accent); }
   border-radius: 8px;
   box-shadow: 0 8px 28px rgb(0 0 0 / 0.35);
 }
-#edit-panel[hidden] { display: none; }
-#edit-panel h3 { margin: 0 0 10px; font-size: 14px; }
-#edit-panel .field { flex: 1; margin-bottom: 8px; }
-#edit-panel input:not([type='color']):not([type='range']), #edit-panel select, #edit-panel textarea { width: 100%; }
-#edit-panel textarea { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--border); border-radius: 5px; padding: 4px 8px; resize: vertical; }
+#edit-panel[hidden], .edit-window[hidden] { display: none; }
+#edit-panel h3, .edit-window h3 { margin: 0 0 10px; font-size: 14px; }
+#edit-panel .field, .edit-window .field { flex: 1; margin-bottom: 8px; }
+#edit-panel input:not([type='color']):not([type='range']), #edit-panel select, #edit-panel textarea,
+.edit-window input:not([type='range']), .edit-window textarea { width: 100%; }
+#edit-panel textarea, .edit-window textarea { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--border); border-radius: 5px; padding: 4px 8px; resize: vertical; }
 #edit-panel input[type='color'] { width: 44px; height: 28px; padding: 2px; }
 button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 

@@ -28,12 +28,12 @@ fn write_png_file(path: String, bytes: Vec<u8>) -> Result<(), String> {
     std::fs::write(&path, bytes).map_err(|e| e.to_string())
 }
 
-/// Writes a video the user picked in the "Save as" dialog. The bytes arrive raw (videos
-/// are large); the path comes percent-encoded in the `x-path` header.
+/// Writes a video or KMZ the user picked in the "Save as" dialog. The bytes arrive raw
+/// (these can be large); the path comes percent-encoded in the `x-path` header.
 #[tauri::command]
-fn write_media_file(request: tauri::ipc::Request<'_>) -> Result<(), String> {
+fn write_binary_file(request: tauri::ipc::Request<'_>) -> Result<(), String> {
     let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
-        return Err("Expected raw video bytes".into());
+        return Err("Expected raw file bytes".into());
     };
     let path = request
         .headers()
@@ -41,11 +41,13 @@ fn write_media_file(request: tauri::ipc::Request<'_>) -> Result<(), String> {
         .and_then(|v| v.to_str().ok())
         .map(percent_decode)
         .ok_or("Missing path")?;
-    let allowed = Path::new(&path)
-        .extension()
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("mp4") || ext.eq_ignore_ascii_case("webm"));
+    let allowed = Path::new(&path).extension().is_some_and(|ext| {
+        ["mp4", "webm", "kmz"]
+            .iter()
+            .any(|ok| ext.eq_ignore_ascii_case(ok))
+    });
     if !allowed {
-        return Err("Only MP4 or WebM videos can be written".into());
+        return Err("Only MP4, WebM or KMZ files can be written".into());
     }
     std::fs::write(&path, bytes).map_err(|e| e.to_string())
 }
@@ -94,7 +96,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             write_text_file,
             write_png_file,
-            write_media_file,
+            write_binary_file,
             clear_tile_cache
         ])
         .run(tauri::generate_context!())

@@ -92,8 +92,8 @@ ${indent}  ${geometry}
 ${indent}</Placemark>`;
 }
 
-/** My Places as KML, with folders, descriptions and styles. */
-export function toKml(features: Feature[], folders: Folder[] = []): string {
+/** My Places as KML, with folders, descriptions and styles; `extra` is appended (e.g. overlays). */
+export function toKml(features: Feature[], folders: Folder[] = [], extra = ''): string {
   const loose = features.filter((f) => !folders.some((d) => d.id === f.folder));
   const parts = [
     ...folders.map(
@@ -113,6 +113,7 @@ ${features
   <Document>
     <name>My Places</name>
 ${parts.join('\n')}
+${extra}
   </Document>
 </kml>
 `;
@@ -131,6 +132,8 @@ export class Places {
   onProfile?: (name: string, positions: Cartesian3[]) => void;
   /** Called with a path's name and points when its ▶ (fly along) button is clicked. */
   onFlyAlong?: (name: string, positions: Cartesian3[]) => void;
+  /** Replaces the plain KML export (used to save a KMZ when there are image overlays). */
+  onExport?: () => Promise<void>;
   /** Called to open the Properties window for a feature. */
   onEdit?: (id: string) => void;
 
@@ -150,7 +153,13 @@ export class Places {
 
   /** Saves My Places as a KML file (File > Save, or the Places panel button). */
   exportKml(): Promise<void> {
+    if (this.onExport) return this.onExport();
     return saveTextFile('My Places.kml', toKml(this.features, this.folders));
+  }
+
+  /** My Places as KML text, with `extra` KML (such as image overlays) added at the end. */
+  kml(extra = ''): string {
+    return toKml(this.features, this.folders, extra);
   }
 
   addPoint(at: Cartographic): string {

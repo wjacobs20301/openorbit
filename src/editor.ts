@@ -12,6 +12,7 @@ import {
   type Viewer,
 } from 'cesium';
 import type { LonLat } from './geometry';
+import { unlockCameraSoon } from './platform';
 import { DEFAULT_FILL, DEFAULT_WIDTH, KIND_NAMES, measure, type Feature, type Places } from './places';
 
 const MIN_POINTS = { point: 1, line: 2, polygon: 3 } as const;
@@ -290,7 +291,7 @@ export class PlaceEditor {
   private up(): void {
     if (!this.grab) return;
     this.grab = null;
-    this.viewer.scene.screenSpaceCameraController.enableInputs = true;
+    unlockCameraSoon(this.viewer.scene.screenSpaceCameraController);
     this.changed();
   }
 
