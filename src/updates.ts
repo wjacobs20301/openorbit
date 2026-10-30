@@ -91,6 +91,8 @@ export function setupUpdates(onMessage: (text: string) => void): { check(): Prom
         return;
       }
       if (!manual && loadSetting('skippedVersion') === version) return;
+      // The notice says it all; clear "Checking for updates…".
+      if (manual) onMessage('');
       show(release, current);
     } catch (err) {
       if (manual) onMessage(`Couldn't check for updates: ${(err as Error).message ?? err}`);
