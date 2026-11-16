@@ -169,7 +169,7 @@ const imageSaver = new ImageSaver(viewer, () => places.legend(), (text) => (hint
 setupOffline(viewer);
 
 // Handy for poking at the scene from devtools during development.
-if (import.meta.env.DEV) Object.assign(window, { viewer, imageOverlays, networkLinks, imageSaver, tours, movieMaker, flight });
+if (import.meta.env.DEV) Object.assign(window, { viewer, imageOverlays, networkLinks, imageSaver, tours, movieMaker, flight, measure });
 
 // ---- Tools (toolbar buttons with data-tool): one at a time; clicking again turns it off.
 const hints: Record<Exclude<Tool, null>, string> = {

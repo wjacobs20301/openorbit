@@ -91,7 +91,7 @@ imagery layers that switch on by themselves when you fly to those countries.
 
 ### Measure, draw and keep your places
 
-<img src="docs/screenshots/ruler.jpg" alt="The ruler measuring a path across the Grand Canyon" width="100%">
+<img src="docs/screenshots/ruler.jpg" alt="The ruler measuring the rim-to-rim trail across the Grand Canyon" width="100%">
 
 - **Ruler** with Line, Path, Polygon and Circle tabs. It shows map length, length over the
   terrain, heading, area and elevation change, and **Save** keeps a measurement.
