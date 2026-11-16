@@ -40,6 +40,8 @@ interface Body {
   imagery: string;
   maximumLevel: number;
   credit: string;
+  /** Where the view starts: [east longitude, latitude]. */
+  start: [number, number];
   places: Place[];
 }
 
@@ -54,6 +56,8 @@ const BODIES: Record<'moon' | 'mars', Body> = {
     maximumLevel: 9,
     credit:
       'Imagery: NASA/GSFC/Arizona State University, LRO Wide Angle Camera mosaic, via <a href="https://trek.nasa.gov/moon/">NASA Moon Trek</a>',
+    // The near side, with the Apollo sites.
+    start: [10, 15],
     places: [
       ['Apollo 11', 0.674, 23.473],
       ['Apollo 12', -3.012, -23.422],
@@ -80,6 +84,8 @@ const BODIES: Record<'moon' | 'mars', Body> = {
     maximumLevel: 8,
     credit:
       'Imagery: NASA/USGS Viking MDIM 2.1 colour mosaic, via <a href="https://trek.nasa.gov/mars/">NASA Mars Trek</a>',
+    // Valles Marineris and the Tharsis volcanoes.
+    start: [-85, -5],
     places: [
       ['Olympus Mons', 18.65, -133.8],
       ['Valles Marineris', -14, -59.2],
@@ -193,7 +199,7 @@ function startBody(body: Body, status: HTMLElement): void {
     }
   });
 
-  viewer.camera.setView({ destination: Cartesian3.fromDegrees(10, 15, ellipsoid.maximumRadius * 2.4, ellipsoid) });
+  viewer.camera.setView({ destination: Cartesian3.fromDegrees(...body.start, ellipsoid.maximumRadius * 2.4, ellipsoid) });
 
   const handler = new ScreenSpaceEventHandler(scene.canvas);
   handler.setInputAction((e: { endPosition: Cartesian2 }) => {

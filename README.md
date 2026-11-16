@@ -69,11 +69,25 @@ OpenOrbit tells you when a new version is out and installs it in one click.
   shortcuts, and a street view person you drag onto the map.
 - **Street-level photos** from Panoramax and Mapillary, with a one-click jump to Google
   Street View.
+
+<img src="docs/screenshots/amsterdam.jpg" alt="Amsterdam's canal ring in the Dutch government's 8 cm aerial photos" width="100%">
+
+Amsterdam's canals in the Netherlands' free 8 cm aerial photos, one of the government
+imagery layers that switch on by themselves when you fly to those countries.
+
+### Fly, and leave the planet
+
+<img src="docs/screenshots/flight.jpg" alt="The flight simulator's head-up display, flying towards the Matterhorn" width="100%">
+
 - **Flight simulator** (Tools › Enter Flight Simulator, ⌥⌘A): fly a light aircraft or a
-  jet over the real terrain, with a head-up display.
+  jet over the real terrain, with a head-up display. Above, heading for the Matterhorn.
 - **Sky, Moon and Mars** (the world picker in the toolbar, or View › Explore): the night
-  sky with 5,000 stars, constellation lines and names; the Moon and Mars from NASA
-  mosaics, with the Apollo sites and the Mars landers marked.
+  sky with 5,000 stars, constellation lines, names and star search; the Moon and Mars from
+  NASA mosaics, with the Apollo sites, the Mars landers and the major features marked.
+
+<img src="docs/screenshots/sky.jpg" alt="Sky view centred on Orion, with constellation lines and star names" width="100%">
+
+<img src="docs/screenshots/moon-mars.jpg" alt="The Moon with the Apollo landing sites, and Mars with Olympus Mons and Valles Marineris" width="100%">
 
 ### Measure, draw and keep your places
 
