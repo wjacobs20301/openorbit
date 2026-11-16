@@ -57,6 +57,8 @@ export class Tours {
   private loop = false;
   /** Set while saving a video; resolves when playback reaches the end. */
   private finished?: () => void;
+  /** Opens the Movie Maker for a tour (the player's "Save video" button). */
+  onMovie?: (id: string) => void;
   /** Called when a recording starts or stops, to update the toolbar button. */
   onRecordingChange?: (recording: boolean) => void;
 
@@ -220,7 +222,7 @@ export class Tours {
       const li = document.createElement('li');
       const icon = document.createElement('span');
       icon.className = 'kind-icon';
-      icon.textContent = '🎬';
+      icon.dataset.icon = 'tour';
       const name = document.createElement('span');
       name.className = 'tree-name';
       name.textContent = tour.name;
@@ -291,7 +293,7 @@ export class Tours {
         <option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option>
       </select>
       <label class="check" title="Play again from the start"><input class="tour-loop" type="checkbox" /> Loop</label>
-      <button class="tour-video" title="Save this tour as a video">🎞 Save video…</button>
+      <button class="tour-video" title="Make a video of this tour (Movie Maker)"><span data-icon="tour"></span> Make movie…</button>
       <button class="tour-close" title="Close the tour">×</button>`;
     this.bar.querySelector<HTMLElement>('.tour-name')!.textContent = tour.name;
     const scrub = this.bar.querySelector<HTMLInputElement>('.tour-scrub')!;
@@ -307,7 +309,10 @@ export class Tours {
     this.bar.querySelector<HTMLInputElement>('.tour-loop')!.addEventListener('change', (e) => {
       this.loop = (e.target as HTMLInputElement).checked;
     });
-    this.bar.querySelector('.tour-video')!.addEventListener('click', () => void this.saveVideo());
+    this.bar.querySelector('.tour-video')!.addEventListener('click', () => {
+      if (this.onMovie && this.current) this.onMovie(this.current.id);
+      else void this.saveVideo();
+    });
     this.bar.querySelector('.tour-close')!.addEventListener('click', () => this.closePlayer());
     this.apply();
   }
@@ -356,12 +361,36 @@ export class Tours {
 
   /** Puts the camera where the tour is at time `t`. */
   private apply(): void {
-    const frames = this.current!.frames;
+    this.pose(this.current!, this.t);
+    const scrub = this.bar.querySelector<HTMLInputElement>('.tour-scrub');
+    if (scrub && document.activeElement !== scrub) scrub.value = String(this.t);
+    const time = this.bar.querySelector('.tour-time');
+    if (time) time.textContent = `${clock(this.t)} / ${clock(this.duration)}`;
+  }
+
+  /** The saved tours, for the Movie Maker. */
+  get all(): { id: string; name: string; duration: number }[] {
+    return this.tours.map((t) => ({ id: t.id, name: t.name, duration: t.frames.at(-1)?.t ?? 0 }));
+  }
+
+  /** The tour open in the player, if any. */
+  get currentId(): string | undefined {
+    return this.current?.id;
+  }
+
+  /** Puts the camera where tour `id` is at `t` seconds, without touching the player. */
+  showFrame(id: string, t: number): void {
+    const tour = this.tours.find((x) => x.id === id);
+    if (tour) this.pose(tour, t);
+  }
+
+  private pose(tour: Tour, t: number): void {
+    const frames = tour.frames;
     let i = 0;
-    while (i < frames.length - 2 && frames[i + 1].t < this.t) i++;
+    while (i < frames.length - 2 && frames[i + 1].t < t) i++;
     const a = frames[i];
     const b = frames[Math.min(i + 1, frames.length - 1)];
-    const s = b.t > a.t ? CesiumMath.clamp((this.t - a.t) / (b.t - a.t), 0, 1) : 0;
+    const s = b.t > a.t ? CesiumMath.clamp((t - a.t) / (b.t - a.t), 0, 1) : 0;
     this.viewer.camera.setView({
       destination: Cartesian3.fromDegrees(
         lerp(a.lon, b.lon, s),
@@ -372,10 +401,6 @@ export class Tours {
       orientation: { heading: lerpAngle(a.heading, b.heading, s), pitch: lerp(a.pitch, b.pitch, s), roll: 0 },
     });
     this.viewer.scene.requestRender();
-    const scrub = this.bar.querySelector<HTMLInputElement>('.tour-scrub');
-    if (scrub && document.activeElement !== scrub) scrub.value = String(this.t);
-    const time = this.bar.querySelector('.tour-time');
-    if (time) time.textContent = `${clock(this.t)} / ${clock(this.duration)}`;
   }
 
   // ---- Video
@@ -419,6 +444,6 @@ export class Tours {
     const ext = type.startsWith('video/mp4') ? 'mp4' : 'webm';
     await saveBinaryFile(`${this.current?.name ?? 'Tour'}.${ext}`, new Blob(chunks, { type: type.split(';')[0] }), ext);
     button.disabled = false;
-    button.textContent = '🎞 Save video…';
+    button.innerHTML = '<span data-icon="tour"></span> Make movie…';
   }
 }

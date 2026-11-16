@@ -9,7 +9,9 @@ import {
   Viewer,
 } from 'cesium';
 import 'cesium/Build/Cesium/Widgets/widgets.css';
+import masks from './data/coverage-masks.json';
 import { NoDataImageryProvider } from './nodata';
+import { PMTilesImageryProvider } from './pmtilesprovider';
 import { viaCache } from './platform';
 import { imagerySources, type ImagerySource } from './sources';
 import { createTerrainProvider } from './terrain';
@@ -53,14 +55,31 @@ export function createGlobe(container: string): { viewer: Viewer; layers: LayerE
   scene.globe.tileCacheSize = 400;
 
   const layers = imagerySources.map((source) => {
-    const Provider = source.fillsNoData ? NoDataImageryProvider : UrlTemplateImageryProvider;
+    const Provider = source.pmtiles
+      ? PMTilesImageryProvider
+      : source.fillsNoData
+        ? NoDataImageryProvider
+        : UrlTemplateImageryProvider;
     const provider = new Provider({
-      url: viaCache(source.url),
+      // PMTiles archives are read by range request, straight from the server.
+      url: source.pmtiles ? `${source.url}#{z}/{x}/{y}` : viaCache(source.url),
       maximumLevel: source.maximumLevel,
       credit: new Credit(source.credit),
       rectangle: source.bounds ? Rectangle.fromDegrees(...source.bounds) : undefined,
     });
-    if (provider instanceof NoDataImageryProvider) provider.outside = source.outside;
+    if (provider instanceof PMTilesImageryProvider) provider.setArchive(source.url);
+    if (provider instanceof NoDataImageryProvider) {
+      provider.setCoverage({
+        outside: source.outside,
+        fillColour: source.fillColour,
+        mask: source.mask && masks[source.mask],
+        exclude: source.exclude?.map((id) => masks[id]),
+        // Imagery levels run about one ahead of the terrain levels showFromLevel counts.
+        missing: source.missingLevels
+          ? { template: viaCache(source.url), minLevel: (source.showFromLevel ?? 0) + 1, levels: source.missingLevels }
+          : undefined,
+      });
+    }
     const layer = new ImageryLayer(provider, { minimumTerrainLevel: source.showFromLevel });
     viewer.imageryLayers.add(layer);
     layer.show = source.enabledByDefault;

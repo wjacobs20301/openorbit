@@ -76,7 +76,8 @@ const FOLDERS_KEY = 'folders';
 export const DEFAULT_COLORS: Record<FeatureKind, string> = { point: '#ffcc33', line: '#ff5a36', polygon: '#3fa9ff' };
 export const DEFAULT_WIDTH = 3;
 export const DEFAULT_FILL = 0.3;
-const KIND_ICONS: Record<FeatureKind, string> = { point: '●', line: '〰', polygon: '▱' };
+// Paths use a drawn icon (data-icon="path"): '〰' is missing from many Linux fonts.
+const KIND_ICONS: Record<FeatureKind, string> = { point: '●', line: '', polygon: '▱' };
 export const KIND_NAMES: Record<FeatureKind, string> = { point: 'Placemark', line: 'Path', polygon: 'Polygon' };
 
 function escapeXml(s: string): string {
@@ -168,7 +169,7 @@ export class Places {
   private readonly list = document.querySelector<HTMLUListElement>('#placemark-list')!;
   /** Terrain heights under raised places' corners, by their coordinates (undefined while loading). */
   private readonly groundCache = new Map<string, number[] | undefined>();
-  /** Called with a path's name and points when its 📈 button is clicked. */
+  /** Called with a path's name and points when its elevation profile button is clicked. */
   onProfile?: (name: string, positions: Cartesian3[]) => void;
   /** Called with a path's name and points when its ▶ (fly along) button is clicked. */
   onFlyAlong?: (name: string, positions: Cartesian3[]) => void;
@@ -533,8 +534,8 @@ export class Places {
       this.refreshShown();
     });
     const name = document.createElement('span');
-    name.className = 'tree-name';
-    name.textContent = `📁 ${folder.name}`;
+    name.className = 'tree-name folder-name';
+    name.textContent = folder.name;
     name.title = 'Double-click to rename';
     name.addEventListener('dblclick', () => renameInPlace(name, folder.name, (text) => {
       folder.name = text;
@@ -601,6 +602,7 @@ export class Places {
       icon.append(img);
     } else {
       icon.textContent = KIND_ICONS[f.kind];
+      if (f.kind === 'line') icon.dataset.icon = 'path';
     }
     icon.style.color = f.color;
 
@@ -616,7 +618,7 @@ export class Places {
       const positions = () => f.coords.map(([lon, lat]) => Cartesian3.fromDegrees(lon, lat));
       li.append(
         button('▶', 'Fly along this path (makes a tour)', () => this.onFlyAlong?.(f.name, positions())),
-        button('📈', 'Show elevation profile', () => this.onProfile?.(f.name, positions())),
+        iconButton('profile', 'Show elevation profile', () => this.onProfile?.(f.name, positions())),
       );
     }
     li.append(button('×', `Delete ${KIND_NAMES[f.kind].toLowerCase()}`, () => this.remove(f.id)));
@@ -644,6 +646,16 @@ function renameInPlace(label: HTMLElement, current: string, done: (text: string)
     if (e.key === 'Escape') finish(false);
   });
   input.addEventListener('blur', () => finish(true));
+}
+
+/** A list button showing one of the drawn icons (see [data-icon] in style.css). */
+function iconButton(icon: string, title: string, onClick: () => void): HTMLButtonElement {
+  const b = button('', title, onClick);
+  const glyph = document.createElement('span');
+  glyph.dataset.icon = icon;
+  b.append(glyph);
+  b.setAttribute('aria-label', title);
+  return b;
 }
 
 function button(text: string, title: string, onClick: () => void): HTMLButtonElement {

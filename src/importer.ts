@@ -393,7 +393,8 @@ function folderTree(viewer: Viewer, parent: Entity | undefined, children: Map<En
       viewer.scene.requestRender();
     });
     const name = document.createElement('span');
-    name.textContent = `📁 ${folder.name ?? 'Folder'}`;
+    name.className = 'folder-name';
+    name.textContent = folder.name ?? 'Folder';
     name.title = `${countFeatures(folder, children).toLocaleString()} features`;
     const count = document.createElement('small');
     count.className = 'hint';

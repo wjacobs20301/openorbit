@@ -2,12 +2,16 @@
 # compiles the Rust desktop shell.
 name: CI
 
-# Manual-only while the account's GitHub Actions billing is blocked (every run was
-# refused before starting). To check every push again, restore:
-#   push: { branches: [main] }
-#   pull_request:
 on:
+  push:
+    branches: [main]
+  pull_request:
   workflow_dispatch:
+
+# A newer push to the same branch or PR cancels the run still going for the older one.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   check:
@@ -39,3 +43,59 @@ jobs:
       - name: Clippy
         working-directory: src-tauri
         run: cargo clippy --all-targets -- -D warnings
+
+  # Builds the Linux app, opens it on a virtual display (software OpenGL, as on a machine
+  # without a GPU driver) and checks it's still running and drawing something a minute and
+  # a half later. The screenshot and log are kept with the run to look at.
+  linux-smoke-test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux system libraries and a virtual display
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf \
+            xvfb imagemagick libgl1-mesa-dri
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - run: npm ci
+      - run: npx tauri build --debug --no-bundle
+
+      - name: Launch the app and take a screenshot
+        run: |
+          xvfb-run -a -s "-screen 0 1440x900x24" bash -c '
+            ./src-tauri/target/debug/openorbit > app.log 2>&1 &
+            app=$!
+            sleep 90
+            import -window root screenshot.png
+            if kill -0 "$app" 2>/dev/null; then echo running > status.txt; kill "$app"; else echo exited > status.txt; fi
+          '
+          cat app.log
+
+      - name: Check it stayed open and drew something
+        run: |
+          test "$(cat status.txt)" = running || { echo "::error::The app quit or crashed"; exit 1; }
+          ! grep -q "panicked" app.log || { echo "::error::The app panicked"; exit 1; }
+          # A blank or single-colour window means nothing rendered.
+          spread=$(convert screenshot.png -colorspace Gray -format "%[fx:standard_deviation]" info:)
+          echo "Screenshot brightness spread: $spread"
+          awk -v s="$spread" 'BEGIN { exit !(s > 0.05) }' || { echo "::error::The window looks blank"; exit 1; }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linux-smoke-test
+          path: |
+            screenshot.png
+            app.log

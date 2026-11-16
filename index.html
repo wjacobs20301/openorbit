@@ -45,6 +45,8 @@
         <button data-action="google-maps" title="View in Google Maps" aria-label="View in Google Maps">
           <svg viewBox="0 0 24 24"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z" /><path d="M9 4v14M15 6v14" /></svg>
         </button>
+        <span class="sep"></span>
+        <select id="world-select" title="Explore Earth, the Sky, the Moon or Mars" aria-label="World"></select>
         <span class="spacer"></span>
         <span id="tool-hint" class="toolbar-hint"></span>
         <button data-action="settings" title="Settings (⌘,)" aria-label="Settings">
@@ -68,13 +70,13 @@
           <summary>Places</summary>
           <input id="places-filter" type="search" placeholder="Find in Places" autocomplete="off" aria-label="Find in Places" />
           <div class="tree">
-            <div id="my-places-root" class="tree-folder" title="Drop places here to take them out of a folder">📁 My Places</div>
+            <div id="my-places-root" class="tree-folder" title="Drop places here to take them out of a folder">My Places</div>
             <ul id="placemark-list" class="list tree-children"></ul>
             <ul id="kept-list" class="list tree-children"></ul>
             <ul id="network-list" class="list tree-children" title="Network links"></ul>
             <ul id="overlay-list" class="list tree-children" title="Image overlays"></ul>
             <ul id="tour-list" class="list tree-children" title="Tours: double-click a name to rename"></ul>
-            <div class="tree-folder">📁 Temporary Places</div>
+            <div class="tree-folder">Temporary Places</div>
             <ul id="import-list" class="list tree-children"></ul>
           </div>
           <p id="import-status" class="hint"></p>
@@ -180,6 +182,10 @@
       <section>
         <h3>Sharper imagery and 3D (your own keys)</h3>
         <div id="keyed-imagery-settings"></div>
+        <label class="field">Cesium ion access token
+          <input id="ion-token" type="password" placeholder="Optional, free from ion.cesium.com (non-commercial)" />
+          <span id="ion-token-status" class="hint"></span>
+        </label>
         <label class="field">Google Maps API key
           <input id="google-key" type="password" placeholder="Optional, for Google 3D (Map Tiles + Geocoding APIs)" />
         </label>

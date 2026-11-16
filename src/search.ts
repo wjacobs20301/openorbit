@@ -123,7 +123,9 @@ export function setupSearch(viewer: Viewer, googleKey: () => string | null): voi
     results.innerHTML = past.length ? '' : '<li class="hint">No searches yet</li>';
     for (const q of past) {
       const li = document.createElement('li');
-      li.textContent = `🕘 ${q}`;
+      const clock = document.createElement('span');
+      clock.dataset.icon = 'history';
+      li.append(clock, ` ${q}`);
       li.addEventListener('click', () => {
         input.value = q;
         void run(q);

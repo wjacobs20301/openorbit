@@ -1,4 +1,5 @@
 import { CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu } from '@tauri-apps/api/menu';
+import { WORLDS, type World } from './worlds';
 
 /** What the menus can do; implemented in main.ts. */
 export interface AppActions {
@@ -13,6 +14,9 @@ export interface AppActions {
   elevationProfile(): void;
   makeStartLocation(): void;
   recordTour(): void;
+  flightSimulator(): void;
+  movieMaker(): void;
+  explore(world: World): void;
   addImageOverlay(): void;
   addNetworkLink(): void;
   playTour(): void;
@@ -148,6 +152,11 @@ export async function setupMenu(a: AppActions): Promise<() => void> {
       reset,
       await item('Make This My Start Location', a.makeStartLocation),
       await separator(),
+      await Submenu.new({
+        text: 'Explore',
+        items: await Promise.all(WORLDS.map((w) => item(w.name, () => a.explore(w.id)))),
+      }),
+      await separator(),
       await PredefinedMenuItem.new({ item: 'Fullscreen' }),
     ],
   });
@@ -158,6 +167,8 @@ export async function setupMenu(a: AppActions): Promise<() => void> {
       await item('Ruler', a.ruler, 'Alt+CmdOrCtrl+R'),
       await item('Street View', a.streetView),
       await item('Play Tour…', a.playTour),
+      await item('Movie Maker…', a.movieMaker),
+      await item('Enter Flight Simulator…', a.flightSimulator, 'Alt+CmdOrCtrl+A'),
       await separator(),
       await item('Save This View for Offline…', a.settings),
     ],

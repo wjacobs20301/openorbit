@@ -45,7 +45,7 @@ The installers aren't code-signed yet:
 - **macOS:** if it says the app can't be opened, right-click OpenOrbit in Applications and choose **Open**.
 - **Windows:** if SmartScreen appears, choose **More info › Run anyway**.
 
-OpenOrbit tells you when a new version is out.
+OpenOrbit tells you when a new version is out and installs it in one click.
 
 ## Features
 
@@ -54,15 +54,26 @@ OpenOrbit tells you when a new version is out.
 <img src="docs/screenshots/manhattan.jpg" alt="Midtown Manhattan with 3D buildings" width="100%">
 
 - **Imagery everywhere:** Sentinel-2 cloudless (10 m) worldwide. In the US, USGS imagery,
-  plus USDA NAIP aerial photos down to 30 cm when you zoom right in. Optionally, Esri or
-  Mapbox imagery with your own free key.
-- **Terrain** you can tilt and fly through, and **3D buildings** for cities worldwide from
-  OpenStreetMap. Optionally, Google's photorealistic 3D Tiles with your own key.
+  plus USDA NAIP aerial photos down to 30 cm when you zoom right in. Government aerial
+  photos (8–50 cm) for France, Spain, Switzerland, Austria, the Netherlands, Flanders and
+  Brussels, Luxembourg, Czechia and Japan, and city photos (7.5–16 cm) for Vancouver,
+  Burnaby, Chilliwack, Edmonton, Red Deer, Winnipeg and Eastern Ontario, no account
+  needed. Optionally, Bing Maps or
+  Google satellite imagery with a free Cesium ion token, or Esri or Mapbox with your own key.
+- **Terrain** you can tilt and fly through, from Mapterhorn (Copernicus 30 m worldwide,
+  lidar where countries publish it), and **3D buildings** for cities worldwide from
+  OpenStreetMap. Optionally, Cesium World Terrain and Cesium OSM Buildings (Cesium ion), or
+  Google's photorealistic 3D Tiles with your own key.
 - **Search** for any place, with history, plus place names, borders and roads.
 - **Navigation like Google Earth's:** look ring, move joystick, zoom slider, keyboard
   shortcuts, and a street view person you drag onto the map.
 - **Street-level photos** from Panoramax and Mapillary, with a one-click jump to Google
   Street View.
+- **Flight simulator** (Tools › Enter Flight Simulator, ⌥⌘A): fly a light aircraft or a
+  jet over the real terrain, with a head-up display.
+- **Sky, Moon and Mars** (the world picker in the toolbar, or View › Explore): the night
+  sky with 5,000 stars, constellation lines and names; the Moon and Mars from NASA
+  mosaics, with the Apollo sites and the Mars landers marked.
 
 ### Measure, draw and keep your places
 
@@ -73,7 +84,8 @@ OpenOrbit tells you when a new version is out.
 - **Placemarks, paths and polygons** with icons, colours, descriptions, altitude settings
   and saved camera views, organised in folders with drag and drop.
 - **Elevation profiles** for any path, **image overlays** (drape a site plan or old map on
-  the terrain), and **tours** you can record, play back or save as video.
+  the terrain), and **tours** you can record and play back, then turn into an HD or 4K
+  movie with the **Movie Maker**.
 - Units in metres or feet, and coordinates as degrees-minutes-seconds, decimal degrees or UTM.
 
 ### Look back in time
@@ -102,6 +114,12 @@ OpenOrbit tells you when a new version is out.
 - 3D globe with terrain (CesiumJS), drawn at full Retina sharpness
 - Imagery: Sentinel-2 cloudless (world, 10 m), USGS imagery (US), and USGS NAIP aerial
   photos (US, 30–60 cm) for close-up views
+- Government aerial photos, 8–50 cm, under one toggle: France (IGN), Spain (PNOA),
+  Switzerland (swisstopo), Austria (basemap.at), Netherlands (PDOK), Flanders and Brussels
+  (Digitaal Vlaanderen), Luxembourg, Czechia (ČÚZK) and Japan (GSI). Each is trimmed to its
+  own country, so neighbours meet cleanly at the border
+- Optional with a free Cesium ion token: Bing Maps aerial, Google satellite, Cesium World
+  Terrain and Cesium OSM Buildings
 - Optional sharp worldwide imagery with your own key: Esri World Imagery (ArcGIS Location
   Platform) or Mapbox Satellite; these are never written to the disk cache
 - Time slider: Landsat back to 1984 (30 m), yearly Sentinel-2 from 2016, and a daily MODIS
@@ -129,8 +147,11 @@ OpenOrbit tells you when a new version is out.
 - Elevation profile for paths and lines (distance, elevation range, climb, steepest grade)
 - Image overlays: drape a picture on the terrain, then move, stretch, rotate and set its
   opacity; saved in My Places and exported as KMZ
-- Tours: record one, or fly along any path; play back with a scrubber, speed and loop;
-  save as an MP4/WebM video
+- Tours: record one, or fly along any path; play back with a scrubber, speed and loop
+- Movie Maker (Tools › Movie Maker): renders a tour frame by frame, waiting for full map
+  detail, to an H.264 MP4 at 720p to 4K and 24, 30 or 60 fps
+- Flight simulator: light aircraft or jet, head-up display, landing and crashing
+- Sky (stars to magnitude 6, constellations, star search), Moon (LRO) and Mars (Viking)
 - Save Image with title, description, legend, compass and scale, up to 8K; Copy Image; Print
 - Latitude/longitude grid (View › Grid) and an overview map (View › Overview Map)
 - Right-click the globe: What's here?, add a placemark, street view, measure, centre the
@@ -180,12 +201,18 @@ endpoints live in [`src/sources.ts`](src/sources.ts).
 | World imagery | EOX Sentinel-2 cloudless 2025 (2016–2024 in the time slider) | CC BY-NC-SA 4.0 (non-commercial); 2016 is CC BY 4.0 |
 | Historical imagery | NASA GIBS: Landsat WELD annual, MODIS Terra daily | Open, attribution requested |
 | US imagery | USGS The National Map, USDA NAIP | Public domain |
-| Terrain | AWS Terrain Tiles | Open data, attribution required |
+| European and Japanese imagery | IGN France, IGN Spain (PNOA), swisstopo, basemap.at, PDOK, Digitaal Vlaanderen, geoportail.lu, ČÚZK, GSI Japan | Open licences (Licence Ouverte 2.0, CC BY 4.0, CC0, swisstopo OGD, GSI terms), attribution required |
+| Country outlines for trimming them | geoBoundaries | Per country (swisstopo OGD, CC BY 4.0, ODbL); see [`src/data/README.md`](src/data/README.md) |
+| Terrain | Mapterhorn (land), AWS Terrain Tiles (sea floor) | Open data, attribution required |
 | Search | Photon (komoot), OpenStreetMap | ODbL, fair use |
 | Labels, borders, roads, buildings | OpenFreeMap vector tiles (OpenMapTiles schema) | ODbL, free with attribution |
 | Sharp imagery (optional) | Esri World Imagery, Mapbox Satellite, user's own key | Provider terms; free tiers, attribution required |
+| Cesium ion (optional) | Bing Maps aerial, Google Maps 2D satellite, Cesium World Terrain, Cesium OSM Buildings, user's own token | Cesium ion terms; the free Community plan is non-commercial |
 | Photorealistic 3D (optional) | Google Map Tiles API + Geocoding API, user's own key | Google Maps Platform terms; billed to the user |
 | Street photos | Panoramax, Mapillary | CC BY-SA 4.0 |
+| Canadian city imagery | City and provincial open data, republished as PMTiles by [Data for Canada](https://source.coop/dataforcanada/d4c-datapkg-orthoimagery) | Each provider's open government licence |
+| Moon and Mars | NASA Moon Trek (LRO WAC mosaic) and Mars Trek (Viking MDIM 2.1) | NASA, public domain |
+| Stars and constellations | [d3-celestial](https://github.com/ofrohn/d3-celestial) data (Hipparcos catalogue) | BSD-3-Clause |
 
 These services are free; please keep the tile cache on and don't add bulk "download a
 region" features for providers that forbid it.
@@ -215,7 +242,15 @@ git push origin v0.2.0
 
 GitHub Actions ([`release.yml`](.github/workflows/release.yml)) builds the installers for
 every platform and attaches them to a draft release. Review the draft, then publish it;
-people on older versions are told about it the next time they open the app.
+people on older versions are told about it the next time they open the app, and can
+install it in one click.
+
+**One-click updates.** The release also carries signed update bundles and a
+`latest.json`, which the app's updater reads. They're signed with the key in the
+`TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` secrets; its public
+half is in `src-tauri/tauri.conf.json`. Keep a backup of the private key: without it,
+installed copies can't take updates and people would have to download the next version by
+hand.
 
 | Platform | Files |
 |---|---|
@@ -223,9 +258,21 @@ people on older versions are told about it the next time they open the app.
 | Windows | `.msi`, `-setup.exe` |
 | Linux | `.AppImage`, `.deb`, `.rpm` |
 
-Builds are unsigned. To sign them, add an Apple Developer ID and/or a Windows certificate as
-repository secrets; see Tauri's [macOS](https://v2.tauri.app/distribute/sign/macos/) and
-[Windows](https://v2.tauri.app/distribute/sign/windows/) signing guides.
+**macOS signing.** The macOS builds are signed with a Developer ID and notarised by Apple when
+these repository secrets are set (Settings → Secrets and variables → Actions); without them
+the build is unsigned:
+
+| Secret | What it is |
+|---|---|
+| `APPLE_CERTIFICATE` | The "Developer ID Application" certificate exported as `.p12`, base64-encoded |
+| `APPLE_CERTIFICATE_PASSWORD` | The password chosen when exporting the `.p12` |
+| `APPLE_SIGNING_IDENTITY` | The certificate's name, e.g. `Developer ID Application: Your Name (TEAMID)` |
+| `APPLE_ID` | The Apple Account email of the developer account |
+| `APPLE_PASSWORD` | An [app-specific password](https://support.apple.com/102654) for that account |
+| `APPLE_TEAM_ID` | The 10-character Team ID from the developer account's Membership page |
+
+Windows builds are unsigned; see Tauri's
+[Windows signing guide](https://v2.tauri.app/distribute/sign/windows/) to add a certificate.
 
 </details>
 
@@ -241,6 +288,10 @@ repository secrets; see Tauri's [macOS](https://v2.tauri.app/distribute/sign/mac
   - `history.ts` historical imagery, `timebar.ts` KML time slider, `importer.ts` file
     import, `networklinks.ts`, `imageoverlay.ts`, `tour.ts`, `saveimage.ts`
   - `platform.ts` desktop/browser helpers, `sources.ts` data endpoints, `updates.ts`
+  - `nodata.ts` and `pmtilesprovider.ts` imagery clean-up, clipping and PMTiles reading;
+    `data/coverage-masks.json` country outlines (from `scripts/coverage-masks.py`)
+  - `cesiumion.ts` Cesium ion layers, `flightsim.ts`, `moviemaker.ts`
+  - `main.ts` picks the world: `earth.ts` (the app) or `otherworlds.ts` (Sky, Moon, Mars)
 - `src-tauri/`: desktop shell (Rust); `tile_cache.rs` serves `tiles://` requests from disk
 
 </details>

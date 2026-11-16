@@ -45,7 +45,7 @@ export class Balloon {
     this.frame.setAttribute('sandbox', 'allow-same-origin allow-popups');
     this.frame.title = 'Feature details';
     this.profileLink.className = 'link';
-    this.profileLink.textContent = '📈 Show elevation profile';
+    this.profileLink.innerHTML = '<span data-icon="profile"></span> Show elevation profile';
     this.profileLink.addEventListener('click', () => this.entity && this.onProfile?.(this.entity));
     this.editLink.className = 'link';
     this.editLink.textContent = '✎ Edit';

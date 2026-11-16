@@ -1,7 +1,7 @@
 {
   "name": "openorbit",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -15,9 +15,13 @@
     "@tauri-apps/api": "^2.12.4",
     "@tauri-apps/plugin-dialog": "^2.8.4",
     "@tauri-apps/plugin-opener": "^2.7.2",
+    "@tauri-apps/plugin-process": "^2.4.0",
+    "@tauri-apps/plugin-updater": "^2.14.1",
     "cesium": "^1.146.0",
     "mapillary-js": "^4.1.2",
+    "mp4-muxer": "^5.2.2",
     "pbf": "^5.1.2",
+    "pmtiles": "^4.5.0",
     "shpjs": "^6.2.0"
   },
   "devDependencies": {

@@ -131,7 +131,7 @@ export class NetworkLinks {
         });
         const icon = document.createElement('span');
         icon.className = 'kind-icon';
-        icon.textContent = '🔗';
+        icon.dataset.icon = 'link';
         const name = document.createElement('span');
         name.className = 'tree-name';
         name.textContent = link.name;

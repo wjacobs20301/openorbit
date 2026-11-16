@@ -54,13 +54,42 @@ jobs:
 
       - run: npm ci
 
+      # Signs and notarises the macOS app when the Apple secrets are set up (see README,
+      # "Releasing"). Without them the build still runs and the app is unsigned.
+      - name: Use the Apple signing secrets, if set
+        if: startsWith(matrix.platform, 'macos')
+        shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$APPLE_CERTIFICATE" ]; then
+            echo "::warning::No Apple signing secrets: this macOS build is unsigned."
+            exit 0
+          fi
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            if [ -n "${!name}" ]; then echo "$name=${!name}" >> "$GITHUB_ENV"; fi
+          done
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signs the update bundles the app's one-click updater installs (not Apple or
+          # Windows code signing). The public half is in tauri.conf.json.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || 'v__VERSION__' }}
           releaseName: 'OpenOrbit ${{ github.ref_type == ''tag'' && github.ref_name || ''v__VERSION__'' }}'
           releaseBody: 'Download the installer for your system below. macOS: .dmg, Windows: .msi or -setup.exe, Linux: .AppImage, .deb or .rpm.'
           releaseDraft: true
           prerelease: false
-          args: ${{ matrix.args }}
+          # Update bundles and latest.json are only made here, where the key is available,
+          # so local builds don't need it (tauri.release.conf.json switches them on).
+          args: ${{ matrix.args }} --config src-tauri/tauri.release.conf.json
+          includeUpdaterJson: true
+          updaterJsonPreferNsis: true

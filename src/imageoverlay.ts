@@ -306,7 +306,7 @@ export class ImageOverlays {
       });
       const icon = document.createElement('span');
       icon.className = 'kind-icon';
-      icon.textContent = '🖼';
+      icon.dataset.icon = 'image';
       const name = document.createElement('span');
       name.className = 'tree-name';
       name.textContent = o.name;

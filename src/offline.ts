@@ -64,7 +64,8 @@ export function planDownload(
 
   const sources = [
     ...imagerySources.filter((s) => s.offline && s.enabledByDefault),
-    { url: terrainSource.url, maximumLevel: terrainSource.maximumLevel, bounds: undefined },
+    // Terrain tiles are 512 px and drawn two zooms below the imagery (see terrain.ts).
+    { url: terrainSource.url, maximumLevel: terrainSource.maximumLevel + 2, bounds: undefined, zoomShift: -2 },
     // Labels, borders, roads and buildings.
     ...(vectorTemplate ? [{ url: vectorTemplate, maximumLevel: vectorTiles.maximumLevel, bounds: undefined }] : []),
   ];
@@ -73,7 +74,8 @@ export function planDownload(
     sources.flatMap((s) => {
       const area = intersect(b, s.bounds);
       const visible = z <= s.maximumLevel && z >= ('showFromLevel' in s ? (s.showFromLevel ?? 0) : 0);
-      return area && visible ? tileUrls(s.url, area, z) : [];
+      const tz = z + ('zoomShift' in s ? (s.zoomShift ?? 0) : 0);
+      return area && visible && tz >= 0 ? tileUrls(s.url, area, tz) : [];
     });
 
   let urls: string[] = [];

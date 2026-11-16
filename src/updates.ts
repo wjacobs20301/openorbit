@@ -25,15 +25,26 @@ function isNewer(latest: string, current: string): boolean {
   return false;
 }
 
+/**
+ * The update the one-click updater would install, or null if none. Throws when the updater
+ * can't tell (no latest.json yet, offline), so the caller falls back to the GitHub check.
+ */
+async function updaterCheck() {
+  const { check } = await import('@tauri-apps/plugin-updater');
+  return check({ timeout: 20_000 });
+}
+
 async function currentVersion(): Promise<string> {
   const { getVersion } = await import('@tauri-apps/api/app');
   return getVersion();
 }
 
 /**
- * Checks GitHub for a newer release: at startup (once a day at most) when automatic checks
- * are on, and on demand from Help › Check for Updates. A newer version shows a notice with
- * Download, Later, and Skip This Version.
+ * Checks for a newer release: at startup (once a day at most) when automatic checks are
+ * on, and on demand from Help › Check for Updates. A newer version shows a notice with
+ * Install and Restart (the signed update bundle from the release, via Tauri's updater),
+ * Later, and Skip This Version. Where the updater can't install (Linux .deb/.rpm, or a
+ * release without update bundles) the button opens the release page instead.
  */
 export function setupUpdates(onMessage: (text: string) => void): { check(): Promise<void> } {
   const notice = document.createElement('div');
@@ -46,20 +57,48 @@ export function setupUpdates(onMessage: (text: string) => void): { check(): Prom
   auto.checked = loadSetting('autoUpdate') !== 'off';
   auto.addEventListener('change', () => storeSetting('autoUpdate', auto.checked ? 'on' : 'off'));
 
-  const show = (release: Release, current: string) => {
+  type Update = Awaited<ReturnType<typeof updaterCheck>>;
+  const show = (release: Release, current: string, update: Update) => {
     const version = release.tag_name.replace(/^v/, '');
     notice.innerHTML = `
       <strong>OpenOrbit ${escape(version)} is available</strong>
-      <span>You have ${escape(current)}. Download the new version to update.</span>
+      <span class="detail">You have ${escape(current)}. ${update ? 'It installs in a moment and OpenOrbit restarts.' : 'Download the new version to update.'}</span>
       <div class="row end">
         <button class="skip">Skip This Version</button>
         <button class="later">Later</button>
-        <button class="download primary">Download</button>
+        <button class="download primary">${update ? 'Install and Restart' : 'Download'}</button>
       </div>`;
     notice.hidden = false;
-    notice.querySelector('.download')!.addEventListener('click', () => {
-      void openExternal(release.html_url);
-      notice.hidden = true;
+    const detail = notice.querySelector<HTMLElement>('.detail')!;
+    const buttons = [...notice.querySelectorAll<HTMLButtonElement>('button')];
+    notice.querySelector('.download')!.addEventListener('click', async () => {
+      if (!update) {
+        void openExternal(release.html_url);
+        notice.hidden = true;
+        return;
+      }
+      buttons.forEach((b) => (b.disabled = true));
+      try {
+        let total = 0;
+        let received = 0;
+        await update.downloadAndInstall((event) => {
+          if (event.event === 'Started') total = event.data.contentLength ?? 0;
+          if (event.event === 'Progress') {
+            received += event.data.chunkLength;
+            detail.textContent = total
+              ? `Downloading… ${Math.round((received / total) * 100)}%`
+              : `Downloading… ${(received / 1e6).toFixed(1)} MB`;
+          }
+          if (event.event === 'Finished') detail.textContent = 'Installing…';
+        });
+        const { relaunch } = await import('@tauri-apps/plugin-process');
+        await relaunch();
+      } catch (err) {
+        // E.g. a .deb or .rpm install on Linux, which the updater can't replace.
+        detail.textContent = `Couldn't install automatically (${(err as Error).message ?? err}). Opening the download page instead.`;
+        void openExternal(release.html_url);
+        buttons.forEach((b) => (b.disabled = false));
+      }
     });
     notice.querySelector('.later')!.addEventListener('click', () => (notice.hidden = true));
     notice.querySelector('.skip')!.addEventListener('click', () => {
@@ -91,9 +130,10 @@ export function setupUpdates(onMessage: (text: string) => void): { check(): Prom
         return;
       }
       if (!manual && loadSetting('skippedVersion') === version) return;
+      const update = await updaterCheck().catch(() => null);
       // The notice says it all; clear "Checking for updates…".
       if (manual) onMessage('');
-      show(release, current);
+      show(release, current, update?.version === version ? update : null);
     } catch (err) {
       if (manual) onMessage(`Couldn't check for updates: ${(err as Error).message ?? err}`);
     }

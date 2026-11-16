@@ -1,0 +1,753 @@
+import {
+  BoundingSphere,
+  Cartesian3,
+  Cartographic,
+  EllipsoidTerrainProvider,
+  HeadingPitchRange,
+  JulianDate,
+  type Entity,
+  type ImageryLayer,
+  Math as CesiumMath,
+  ScreenSpaceEventHandler,
+  ScreenSpaceEventType,
+} from 'cesium';
+import { Balloon } from './balloon';
+import { setupContextMenu, whatsHere } from './contextmenu';
+import { Buildings } from './buildings';
+import { Drawer } from './draw';
+import { NATIONAL_GROUP_NAME } from './sources';
+import { createGlobe, formatCoords, pickGround } from './globe';
+import { formatAltitude, formatHeight, formatLatLon, getCoordFormat, getUnits, onUnitsChange, setCoordFormat, setUnits, type CoordFormat } from './units';
+import { Google3D } from './google3d';
+import { setupHistory, type HistoryControl } from './history';
+import { canImport, setupImport } from './importer';
+import { KeyedImagery } from './keyedimagery';
+import { PlaceLabels } from './labels';
+import { Measure } from './measure';
+import type { AppActions } from './menu';
+import { setupNavControls } from './navcontrols';
+import { setupOffline } from './offline';
+import { addVectorOverlays } from './overlay';
+import { Pegman } from './pegman';
+import { groundOverlayKml, ImageOverlays } from './imageoverlay';
+import { zip } from './kmz';
+import { Places } from './places';
+import { ElevationProfile } from './profile';
+import { PlaceEditor } from './editor';
+import {
+  clearTileCache,
+  isDesktop,
+  isTyping,
+  loadSetting,
+  saveBinaryFile,
+  saveTextFile,
+  storeSetting,
+} from './platform';
+import { setupSearch } from './search';
+import { setupScaleLegend } from './scale';
+import { setupStartView } from './startview';
+import { StreetView } from './streetview';
+import { Tours } from './tour';
+import { setupSun, type SunControl } from './sun';
+import { createTerrainProvider } from './terrain';
+import { CesiumIon } from './cesiumion';
+import { FlightSimulator } from './flightsim';
+import { MovieMaker } from './moviemaker';
+import { setupWorldPicker, switchWorld } from './worlds';
+import { openInGoogleEarthWeb, openInGoogleMaps, viewLocation } from './viewtools';
+import { ImageSaver } from './saveimage';
+import { setupPlacesFilter } from './findplaces';
+import { NetworkLinks } from './networklinks';
+import { setupTimeBar } from './timebar';
+import { Grid } from './grid';
+import { trackHorizon } from './ontop';
+import { setupUpdates } from './updates';
+import { OverviewMap } from './overviewmap';
+
+type Tool = 'placemark' | 'path' | 'polygon' | 'measure' | 'street' | null;
+
+// Set up further down; the status bar and toolbar read them once they exist.
+let history: HistoryControl | undefined;
+let sun: SunControl | undefined;
+/** Refreshes the desktop menu's checkmarks once the menu exists. */
+let syncMenu: (() => void) | undefined;
+
+const app = document.querySelector<HTMLElement>('#app')!;
+setupWorldPicker();
+const { viewer, layers } = createGlobe('globe');
+trackHorizon(viewer);
+const startView = setupStartView(viewer);
+const scaleLegend = setupScaleLegend(viewer);
+const grid = new Grid(viewer);
+const overviewMap = new OverviewMap(viewer);
+
+// The globe redraws only on request. Redraw after any UI interaction and whenever
+// entities or data sources change; modules with their own async work request too.
+const redraw = () => viewer.scene.requestRender();
+for (const type of ['click', 'input', 'change', 'keydown'] as const) {
+  document.addEventListener(type, () => {
+    redraw();
+    window.setTimeout(redraw, 150);
+  });
+}
+viewer.entities.collectionChanged.addEventListener(redraw);
+viewer.dataSources.dataSourceAdded.addEventListener((_, ds) => {
+  ds.entities.collectionChanged.addEventListener(redraw);
+  redraw();
+});
+viewer.dataSources.dataSourceRemoved.addEventListener(redraw);
+
+const overlays = addVectorOverlays(viewer);
+const labels = new PlaceLabels(viewer);
+const buildings = new Buildings(viewer);
+const google3d = new Google3D(viewer);
+const places = new Places(viewer);
+const hint = document.querySelector<HTMLElement>('#tool-hint')!;
+const measure = new Measure(viewer);
+const street = new StreetView(viewer);
+const balloon = new Balloon(viewer);
+const profile = new ElevationProfile(viewer);
+const showLineProfile = (entity: Entity) => {
+  const positions = entity.polyline?.positions?.getValue(JulianDate.now()) as Cartesian3[] | undefined;
+  if (positions?.length) void profile.show(entity.name ?? 'Line', positions);
+};
+balloon.onProfile = showLineProfile;
+const tours = new Tours(viewer);
+const movieMaker = new MovieMaker(viewer, tours);
+tours.onMovie = (id) => movieMaker.show(id);
+balloon.onFlyAlong = (entity) => {
+  const positions = entity.polyline?.positions?.getValue(JulianDate.now()) as Cartesian3[] | undefined;
+  if (positions?.length) void tours.fromLine(entity.name ?? 'line', positions);
+};
+places.onFlyAlong = (name, positions) => void tours.fromLine(name, positions);
+tours.onRecordingChange = (on) => {
+  document.querySelector('[data-action="record-tour"]')?.classList.toggle('recording', on);
+  hint.textContent = on ? 'Recording: fly around, then press Stop.' : '';
+};
+balloon.canEdit = (entity) => !!places.get(entity.id) || !!imageOverlays.get(entity.id);
+balloon.onEdit = (entity) => (imageOverlays.get(entity.id) ? imageOverlays.edit(entity.id) : editor.open(entity.id));
+places.onProfile = (name, positions) => void profile.show(name, positions);
+const editor = new PlaceEditor(viewer, places);
+const imageOverlays = new ImageOverlays(viewer);
+// With image overlays, My Places is saved as a KMZ so the pictures travel with it.
+places.onExport = async () => {
+  const items = await imageOverlays.exportable();
+  if (!items.length) return saveTextFile('My Places.kml', places.kml());
+  const ext = (type: string) => ({ 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' })[type] ?? 'png';
+  const files = items.map(({ overlay, image }) => ({ name: `files/${overlay.id}.${ext(overlay.type)}`, data: image }));
+  const kml = places.kml(items.map(({ overlay }, i) => groundOverlayKml(overlay, files[i].name)).join('\n'));
+  await saveBinaryFile('My Places.kmz', await zip([{ name: 'doc.kml', data: kml }, ...files]), 'kmz');
+};
+places.onEdit = (id) => editor.open(id);
+measure.onClose = () => setTool(null);
+measure.onSave = (kind, coords, name) => {
+  places.addShape(kind, coords, name);
+  hint.textContent = `Saved “${name}” to My Places.`;
+};
+const drawer = new Drawer(
+  viewer,
+  (summary) => (hint.textContent = summary),
+  (kind, coords) => {
+    // As in Google Earth, a new place opens its Properties window.
+    const id = places.addShape(kind, coords);
+    setTool(null);
+    editor.open(id, true);
+  },
+);
+setupSearch(viewer, () => (google3d.active ? loadSetting('googleKey') : null));
+// Street view owns the arrow keys while it's open.
+const flight = new FlightSimulator(viewer, (on) => app.classList.toggle('flying', on));
+const nav = setupNavControls(viewer, () => !street.isOpen && !flight.active, () => startView.goHome());
+const pegman = new Pegman(viewer, street);
+pegman.onTap = () => setTool('street');
+const importer = setupImport(viewer);
+setupPlacesFilter();
+setupTimeBar(viewer);
+const networkLinks = new NetworkLinks(viewer);
+const updates = setupUpdates((text) => (hint.textContent = text));
+const imageSaver = new ImageSaver(viewer, () => places.legend(), (text) => (hint.textContent = text));
+setupOffline(viewer);
+
+// Handy for poking at the scene from devtools during development.
+if (import.meta.env.DEV) Object.assign(window, { viewer, imageOverlays, networkLinks, imageSaver, tours, movieMaker, flight });
+
+// ---- Tools (toolbar buttons with data-tool): one at a time; clicking again turns it off.
+const hints: Record<Exclude<Tool, null>, string> = {
+  placemark: 'Click the globe to drop a placemark.',
+  path: 'Click to add points along the path.',
+  polygon: 'Click to add the corners of the shape.',
+  measure: 'Ruler: click points on the globe to measure.',
+  street: 'Click a blue line to see street-level photos.',
+};
+let tool: Tool = null;
+const toolButtons = document.querySelectorAll<HTMLButtonElement>('[data-tool]');
+
+function setTool(next: Tool): void {
+  if (tool === 'measure') measure.clear();
+  drawer.cancel();
+  tool = next === tool ? null : next;
+  toolButtons.forEach((b) => b.classList.toggle('active', b.dataset.tool === tool));
+  hint.textContent = tool ? hints[tool] : '';
+  viewer.canvas.style.cursor = tool ? 'crosshair' : '';
+  pegman.showCoverage(tool === 'street');
+  if (tool === 'path') drawer.start('line');
+  if (tool === 'polygon') drawer.start('polygon');
+  if (tool === 'measure') measure.open();
+}
+toolButtons.forEach((b) => b.addEventListener('click', () => setTool(b.dataset.tool as Tool)));
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    setTool(null);
+    balloon.close();
+    if (editor.active && !isTyping(e)) editor.close(false);
+    if (imageOverlays.active && !isTyping(e)) imageOverlays.close(false);
+  }
+  // Leave typing in sidebar fields alone.
+  if (!drawer.kind || isTyping(e)) return;
+  if (e.key === 'Enter') drawer.finish();
+  if (e.key === 'Backspace') {
+    e.preventDefault();
+    drawer.undo();
+  }
+});
+
+// Double-click finishes a drawing instead of Cesium's default zoom-to-entity.
+viewer.cesiumWidget.screenSpaceEventHandler.removeInputAction(ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+
+const handler = new ScreenSpaceEventHandler(viewer.scene.canvas);
+handler.setInputAction(({ position }: ScreenSpaceEventHandler.PositionedEvent) => {
+  // With no tool active, a click shows the details of whatever feature is under it.
+  if (!tool) {
+    // While editing, clicks go to the editor's handles instead.
+    if (!editor.active && !imageOverlays.active) balloon.openAt(position);
+    return;
+  }
+  const ground = pickGround(viewer, position);
+  if (!ground) return;
+  if (tool === 'placemark') {
+    const id = places.addPoint(ground);
+    setTool(null);
+    editor.open(id, true);
+    return;
+  }
+  if (tool === 'path' || tool === 'polygon') drawer.add(ground);
+  if (tool === 'measure') measure.add(ground);
+  if (tool === 'street') {
+    void street.openAt(CesiumMath.toDegrees(ground.longitude), CesiumMath.toDegrees(ground.latitude));
+  }
+}, ScreenSpaceEventType.LEFT_CLICK);
+handler.setInputAction(() => drawer.finish(), ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+
+// ---- Status bar, as in Google Earth: imagery date, pointer position, elevation, eye altitude.
+const status = document.createElement('div');
+status.id = 'status';
+document.querySelector('#globe')!.append(status);
+let pointer = '';
+const updateStatus = () => {
+  status.textContent = `Imagery Date: ${history?.imageryDate ?? ''}    ${pointer}    eye alt ${formatAltitude(
+    viewer.camera.positionCartographic.height,
+  )}`;
+};
+let lastMove = 0;
+handler.setInputAction(({ endPosition }: ScreenSpaceEventHandler.MotionEvent) => {
+  if (drawer.kind) {
+    drawer.move(pickGround(viewer, endPosition));
+    redraw();
+  }
+  if (tool === 'measure') measure.move(pickGround(viewer, endPosition));
+  const now = performance.now();
+  if (now - lastMove < 50) return;
+  lastMove = now;
+  const ground = pickGround(viewer, endPosition);
+  pointer = ground ? `${formatCoords(ground)}    elev ${formatHeight(ground.height)}` : '';
+  updateStatus();
+}, ScreenSpaceEventType.MOUSE_MOVE);
+viewer.camera.changed.addEventListener(() => updateStatus());
+onUnitsChange(() => {
+  pointer = '';
+  updateStatus();
+});
+
+// Streaming indicator, like Google Earth's: spins while map tiles are still loading.
+const streaming = document.createElement('div');
+streaming.id = 'streaming';
+streaming.title = 'Loading imagery and terrain';
+streaming.hidden = true;
+document.querySelector('#globe')!.append(streaming);
+viewer.scene.globe.tileLoadProgressEvent.addEventListener((queued: number) => {
+  streaming.hidden = queued === 0;
+  streaming.title = queued ? `Loading ${queued} map tiles` : '';
+});
+
+// ---- Layers panel: a small tree, grouped like Google Earth's.
+const layerList = document.querySelector<HTMLUListElement>('#layer-list')!;
+const groups = new Map<string, HTMLUListElement>();
+function groupList(name: string): HTMLUListElement {
+  let ul = groups.get(name);
+  if (!ul) {
+    const li = document.createElement('li');
+    li.className = 'layer-group';
+    const details = document.createElement('details');
+    details.open = loadSetting(`layerGroup.${name}`) !== 'closed';
+    details.addEventListener('toggle', () => storeSetting(`layerGroup.${name}`, details.open ? 'open' : 'closed'));
+    const summary = document.createElement('summary');
+    summary.textContent = name;
+    ul = document.createElement('ul');
+    ul.className = 'list';
+    details.append(summary, ul);
+    li.append(details);
+    layerList.append(li);
+    groups.set(name, ul);
+  }
+  return ul;
+}
+function addToggle(
+  label: string,
+  checked: boolean,
+  onChange: (on: boolean) => void,
+  note?: string,
+  group?: string,
+): HTMLInputElement {
+  const li = document.createElement('li');
+  const box = document.createElement('input');
+  box.type = 'checkbox';
+  box.checked = checked;
+  // Each layer remembers whether it was on, across restarts.
+  const key = `layer.${group ?? ''}.${label}`;
+  box.addEventListener('change', () => {
+    storeSetting(key, box.checked ? 'on' : 'off');
+    onChange(box.checked);
+  });
+  const saved = loadSetting(key);
+  if (saved && (saved === 'on') !== checked) {
+    box.checked = saved === 'on';
+    // Applied once startup finishes, when everything the toggle uses exists.
+    queueMicrotask(() => onChange(box.checked));
+  }
+  const text = document.createElement('label');
+  text.textContent = label;
+  if (note) li.title = note;
+  text.addEventListener('click', () => box.click());
+  li.append(box, text);
+  (group ? groupList(group) : layerList).append(li);
+  return box;
+}
+
+for (const { source, layer } of layers.filter((l) => !l.source.group)) {
+  addToggle(source.name, layer.show, (on) => (layer.show = on), source.note, 'Imagery');
+}
+// The national aerial photo layers share one toggle; each only draws in its own country.
+const nationalLayers = layers.filter((l) => l.source.group === 'national');
+addToggle(
+  NATIONAL_GROUP_NAME,
+  true,
+  (on) => nationalLayers.forEach((l) => (l.layer.show = on)),
+  nationalLayers.map((l) => l.source.name).join('\n'),
+  'Imagery',
+);
+// Overlays were added roads first, so roads is the lowest overlay layer.
+const keyedImagery = new KeyedImagery(viewer, overlays.roads, (label, checked, onChange, note) =>
+  addToggle(label, checked, onChange, note, 'Imagery'),
+);
+// Cesium ion imagery, set up further down once the terrain and building toggles exist.
+let ionImagery: () => ImageryLayer[] = () => [];
+history = setupHistory(
+  viewer,
+  () => [...layers.filter((l) => l.source.bounds).map((l) => l.layer), ...keyedImagery.current, ...ionImagery()],
+  overlays.roads,
+  () => {
+    updateStatus();
+    syncViewState();
+  },
+);
+// Google's 3D Tiles replace the globe and must not be mixed with other map data,
+// so the OpenStreetMap layers stay off while they're showing.
+const openData = (on: boolean) => on && !google3d.active;
+// Our OpenStreetMap buildings step aside while Cesium OSM Buildings (the same data) shows.
+let ionBuildingsOn = false;
+const openDataToggles = [
+  addToggle('Borders', overlays.borders.show, (on) => (overlays.borders.show = openData(on)), undefined, 'Borders and Labels'),
+  addToggle('Place names', true, (on) => labels.setEnabled(openData(on)), undefined, 'Borders and Labels'),
+  addToggle('Roads', overlays.roads.show, (on) => (overlays.roads.show = openData(on))),
+  addToggle('OpenStreetMap', true, (on) => buildings.setEnabled(openData(on) && !ionBuildingsOn), undefined, '3D Buildings'),
+];
+const osmBuildingsToggle = openDataToggles[3];
+function refreshOpenData(): void {
+  ion.setBuildingsAllowed(!google3d.active);
+  for (const box of openDataToggles) {
+    box.disabled = google3d.active;
+    box.dispatchEvent(new Event('change'));
+  }
+}
+
+const googleToggle = addToggle(
+  'Google photorealistic (your key)',
+  false,
+  async (on) => {
+    const key = loadSetting('googleKey');
+    if (on && !key) {
+      googleToggle.checked = false;
+      hint.textContent = 'Add a Google Maps API key in Settings first.';
+      return;
+    }
+    if (on) {
+      try {
+        await google3d.enable(key);
+        refreshOpenData();
+        redraw();
+        hint.textContent = 'Showing Google 3D. Search now uses Google.';
+      } catch (err) {
+        googleToggle.checked = false;
+        // Cesium rejects with a RequestErrorEvent (statusCode, no message) for HTTP errors.
+        const code = (err as { statusCode?: number }).statusCode;
+        hint.textContent = code
+          ? `Google rejected the key (HTTP ${code}). Check it and that the Map Tiles API is enabled.`
+          : `Google 3D Tiles failed: ${(err as Error).message ?? err}`;
+      }
+    } else {
+      google3d.disable();
+      refreshOpenData();
+      hint.textContent = '';
+    }
+  },
+  'Uses Google Map Tiles API with your own key; usage is billed to your Google Cloud account.',
+  '3D Buildings',
+);
+addToggle('Street photos (coverage lines)', false, (on) => pegman.setCoverageLayer(on), 'Blue lines where Panoramax has street photos');
+const terrainToggle = addToggle('Terrain', true, () => void applyTerrain());
+const ion = new CesiumIon(
+  viewer,
+  overlays.roads,
+  addToggle,
+  () => void applyTerrain(),
+  (on) => {
+    ionBuildingsOn = on;
+    buildings.setEnabled(openData(osmBuildingsToggle.checked) && !on);
+  },
+);
+ionImagery = () => ion.current;
+/** Open terrain, Cesium World Terrain (with an ion token) or a smooth ellipsoid. */
+async function applyTerrain(): Promise<void> {
+  if (!terrainToggle.checked) {
+    viewer.terrainProvider = new EllipsoidTerrainProvider();
+  } else if (ion.terrainWanted) {
+    try {
+      viewer.terrainProvider = await ion.worldTerrain();
+    } catch (err) {
+      hint.textContent = `Cesium World Terrain failed: ${(err as Error).message ?? err}`;
+      viewer.terrainProvider = createTerrainProvider();
+    }
+  } else {
+    viewer.terrainProvider = createTerrainProvider();
+  }
+}
+const atmosphereBox = addToggle('Atmosphere', true, (on) => setAtmosphere(on));
+function setAtmosphere(on: boolean): void {
+  viewer.scene.globe.showGroundAtmosphere = on;
+  if (viewer.scene.skyAtmosphere) viewer.scene.skyAtmosphere.show = on;
+  atmosphereBox.checked = on;
+  storeSetting('layer..Atmosphere', on ? 'on' : 'off');
+  redraw();
+  syncViewState();
+}
+
+// ---- Sidebar sections remember whether they're open.
+for (const panel of document.querySelectorAll<HTMLDetailsElement>('details[data-panel]')) {
+  const key = `panel.${panel.dataset.panel}`;
+  const saved = loadSetting(key);
+  if (saved) panel.open = saved === 'open';
+  panel.addEventListener('toggle', () => storeSetting(key, panel.open ? 'open' : 'closed'));
+}
+
+// ---- Toolbar and map bars.
+sun = setupSun(viewer, () => syncViewState());
+const sunCtl = sun;
+const historyCtl = history;
+const settingsDialog = document.querySelector<HTMLDialogElement>('#settings-dialog')!;
+const shortcutsDialog = document.querySelector<HTMLDialogElement>('#shortcuts-dialog')!;
+
+function setPanelShown(cls: string, shown: boolean): void {
+  app.classList.toggle(cls, !shown);
+  storeSetting(`view.${cls}`, shown ? 'shown' : 'hidden');
+  // The globe's canvas needs to notice its new size.
+  window.setTimeout(() => {
+    viewer.resize();
+    redraw();
+  }, 0);
+  syncViewState();
+}
+
+const toggles: AppActions['toggles'] = {
+  toolbar: { get: () => !app.classList.contains('no-toolbar'), set: (on) => setPanelShown('no-toolbar', on) },
+  sidebar: { get: () => !app.classList.contains('no-sidebar'), set: (on) => setPanelShown('no-sidebar', on) },
+  statusBar: { get: () => !app.classList.contains('no-status'), set: (on) => setPanelShown('no-status', on) },
+  navigation: { get: () => !app.classList.contains('no-nav'), set: (on) => setPanelShown('no-nav', on) },
+  scaleLegend: {
+    get: () => scaleLegend.shown,
+    set: (on) => {
+      scaleLegend.setShown(on);
+      storeSetting('view.scaleLegend', on ? 'shown' : 'hidden');
+      syncViewState();
+    },
+  },
+  grid: {
+    get: () => grid.shown,
+    set: (on) => {
+      grid.setShown(on);
+      storeSetting('view.grid', on ? 'shown' : 'hidden');
+      syncViewState();
+    },
+  },
+  overviewMap: {
+    get: () => overviewMap.shown,
+    set: (on) => {
+      overviewMap.setShown(on);
+      storeSetting('view.overviewMap', on ? 'shown' : 'hidden');
+      syncViewState();
+    },
+  },
+  atmosphere: { get: () => viewer.scene.globe.showGroundAtmosphere, set: setAtmosphere },
+  sun: { get: () => sunCtl.open, set: (on) => sunCtl.setOpen(on) },
+  history: { get: () => historyCtl.open, set: (on) => historyCtl.setOpen(on) },
+};
+
+const importInput = document.querySelector<HTMLInputElement>('#import-input')!;
+const actions: AppActions = {
+  open: () => importInput.click(),
+  saveKml: () => void places.exportKml(),
+  saveImage: () => (imageSaver.open ? imageSaver.close() : imageSaver.show()),
+  copyImage: () => void imageSaver.copy(),
+  print: () => imageSaver.show(),
+  googleMaps: () => void openInGoogleMaps(viewer),
+  googleEarthWeb: () => void openInGoogleEarthWeb(viewer),
+  recordTour: () => tours.toggleRecording(),
+  flightSimulator: () => flight.toggle(),
+  movieMaker: () => movieMaker.show(),
+  explore: (world) => switchWorld(world),
+  addImageOverlay: () => imageOverlays.choose(),
+  addNetworkLink: () => networkLinks.choose(),
+  playTour: () => {
+    toggles.sidebar.set(true);
+    document.querySelector<HTMLDetailsElement>('[data-panel="places"]')!.open = true;
+    hint.textContent = 'Choose a tour under My Places and press ▶.';
+  },
+  makeStartLocation: () => {
+    startView.makeStart();
+    hint.textContent = 'This view is now your start location (and the Home button goes here).';
+  },
+  elevationProfile: () => {
+    const selected = balloon.selected;
+    if (selected?.polyline) showLineProfile(selected);
+    else hint.textContent = 'Click a path or line first, then choose Show Elevation Profile.';
+  },
+  copyViewLocation: () => {
+    const text = viewLocation(viewer);
+    navigator.clipboard.writeText(text).then(
+      () => (hint.textContent = `Copied ${text}`),
+      () => (hint.textContent = `View location: ${text}`),
+    );
+  },
+  find: () => {
+    toggles.sidebar.set(true);
+    document.querySelector<HTMLDetailsElement>('[data-panel="search"]')!.open = true;
+    document.querySelector<HTMLInputElement>('#search-input')!.focus();
+  },
+  settings: () => settingsDialog.showModal(),
+  shortcuts: () => shortcutsDialog.showModal(),
+  checkForUpdates: () => {
+    hint.textContent = 'Checking for updates…';
+    void updates.check();
+  },
+  addPlacemark: () => setTool('placemark'),
+  addPath: () => setTool('path'),
+  addPolygon: () => setTool('polygon'),
+  ruler: () => setTool('measure'),
+  streetView: () => setTool('street'),
+  northUp: nav.northUp,
+  resetTilt: nav.resetTilt,
+  resetTiltAndNorth: nav.resetTiltAndNorth,
+  toggles,
+};
+
+const toolbarActions: Record<string, () => void> = {
+  sidebar: () => toggles.sidebar.set(!toggles.sidebar.get()),
+  history: () => toggles.history.set(!historyCtl.open),
+  sun: () => toggles.sun.set(!sunCtl.open),
+  'save-image': actions.saveImage,
+  'record-tour': () => tours.toggleRecording(),
+  'image-overlay': () => imageOverlays.choose(),
+  'google-maps': actions.googleMaps,
+  settings: actions.settings,
+};
+document.querySelectorAll<HTMLButtonElement>('#toolbar [data-action]').forEach((b) =>
+  b.addEventListener('click', () => toolbarActions[b.dataset.action!]()),
+);
+
+/** Keeps toolbar buttons and menu checkmarks in step with what's showing. */
+function syncViewState(): void {
+  document.querySelector('[data-action="history"]')?.classList.toggle('active', history?.open ?? false);
+  document.querySelector('[data-action="sun"]')?.classList.toggle('active', sun?.open ?? false);
+  document.querySelector('[data-action="sidebar"]')?.classList.toggle('active', app.classList.contains('no-sidebar'));
+  syncMenu?.();
+}
+
+// Shortcuts. The desktop app's menus handle these themselves; the browser needs them here.
+if (!isDesktop) {
+  document.addEventListener('keydown', (e) => {
+    if (!(e.metaKey || e.ctrlKey)) return;
+    const k = e.code;
+    const run = (fn: () => void) => {
+      e.preventDefault();
+      fn();
+    };
+    if (e.shiftKey && k === 'KeyP') run(actions.addPlacemark);
+    else if (e.shiftKey && k === 'KeyT') run(actions.addPath);
+    else if (e.shiftKey && k === 'KeyG') run(actions.addPolygon);
+    else if (e.altKey && k === 'KeyB') run(toolbarActions.sidebar);
+    else if (e.altKey && k === 'KeyS') run(actions.saveImage);
+    else if (e.altKey && k === 'KeyC') run(actions.copyImage);
+    else if (!e.shiftKey && !e.altKey && k === 'KeyP') run(actions.print);
+    else if (!e.shiftKey && !e.altKey && k === 'KeyF') run(actions.find);
+    else if (!e.shiftKey && !e.altKey && k === 'KeyS') run(actions.saveKml);
+    else if (!e.shiftKey && !e.altKey && k === 'KeyO') run(actions.open);
+    else if (!e.shiftKey && !e.altKey && k === 'KeyL') run(() => toggles.grid.set(!toggles.grid.get()));
+    else if (e.altKey && k === 'KeyM') run(() => toggles.overviewMap.set(!toggles.overviewMap.get()));
+    else if (e.altKey && k === 'KeyA') run(actions.flightSimulator);
+    else if (k === 'Comma') run(actions.settings);
+    else if (k === 'Slash') run(actions.shortcuts);
+  });
+} else {
+  void import('./menu').then(async ({ setupMenu }) => {
+    syncMenu = await setupMenu(actions);
+  });
+}
+
+// ---- Right-click menu on the map.
+setupContextMenu(viewer.canvas, (at) => pickGround(viewer, at), (ground) => {
+  const lon = CesiumMath.toDegrees(ground.longitude);
+  const lat = CesiumMath.toDegrees(ground.latitude);
+  const coords = formatLatLon(lat, lon);
+  return [
+    {
+      label: "What's here?",
+      run: () => {
+        hint.textContent = 'Looking up this place…';
+        whatsHere(lon, lat).then(
+          (text) => (hint.textContent = text),
+          () => (hint.textContent = "Couldn't look up this place right now."),
+        );
+      },
+    },
+    {
+      label: 'Add placemark here',
+      run: () => {
+        setTool(null);
+        editor.open(places.addPoint(ground), true);
+      },
+    },
+    { label: 'Street view here', run: () => void street.openAt(lon, lat) },
+    {
+      label: 'Measure from here',
+      run: () => {
+        setTool('measure');
+        measure.add(ground);
+      },
+    },
+    {
+      label: 'Centre the view here',
+      run: () => {
+        const { camera } = viewer;
+        const range = Cartesian3.distance(camera.positionWC, Cartographic.toCartesian(ground));
+        camera.flyToBoundingSphere(new BoundingSphere(Cartographic.toCartesian(ground), 0), {
+          offset: new HeadingPitchRange(camera.heading, camera.pitch, range),
+          duration: 0.8,
+        });
+      },
+    },
+    {
+      label: 'Copy coordinates',
+      run: () =>
+        void navigator.clipboard.writeText(coords).then(
+          () => (hint.textContent = `Copied ${coords}`),
+          () => (hint.textContent = coords),
+        ),
+    },
+  ];
+});
+
+// ---- Drop files onto the window to open them, as in Google Earth. Pictures become
+// image overlays; KML, GPX, shapefiles and the rest open in Temporary Places.
+const dropHint = document.createElement('div');
+dropHint.id = 'drop-hint';
+dropHint.textContent = 'Drop to open';
+dropHint.hidden = true;
+document.body.append(dropHint);
+let dragDepth = 0;
+const hasFiles = (e: DragEvent) => !!e.dataTransfer?.types.includes('Files');
+window.addEventListener('dragenter', (e) => {
+  if (!hasFiles(e)) return;
+  dragDepth++;
+  dropHint.hidden = false;
+});
+window.addEventListener('dragleave', (e) => {
+  if (hasFiles(e) && --dragDepth <= 0) dropHint.hidden = true;
+});
+window.addEventListener('dragover', (e) => {
+  if (hasFiles(e)) e.preventDefault();
+});
+window.addEventListener('drop', (e) => {
+  if (!hasFiles(e)) return;
+  e.preventDefault();
+  dragDepth = 0;
+  dropHint.hidden = true;
+  const files = [...(e.dataTransfer?.files ?? [])];
+  const pictures = files.filter((f) => /^image\/(png|jpeg|gif|webp)$/.test(f.type));
+  const data = files.filter((f) => !pictures.includes(f) && canImport(f));
+  pictures.forEach((f) => void imageOverlays.add(f));
+  void importer.openFiles(data);
+  if (!pictures.length && !data.length) hint.textContent = "OpenOrbit can't open that kind of file.";
+});
+
+// ---- Settings dialog.
+const unitsSelect = document.querySelector<HTMLSelectElement>('#units')!;
+unitsSelect.value = getUnits();
+unitsSelect.addEventListener('change', () => setUnits(unitsSelect.value === 'imperial' ? 'imperial' : 'metric'));
+const coordSelect = document.querySelector<HTMLSelectElement>('#coord-format')!;
+coordSelect.value = getCoordFormat();
+coordSelect.addEventListener('change', () => setCoordFormat(coordSelect.value as CoordFormat));
+const tokenInput = document.querySelector<HTMLInputElement>('#mapillary-token')!;
+tokenInput.value = loadSetting('mapillaryToken');
+tokenInput.addEventListener('change', () => storeSetting('mapillaryToken', tokenInput.value.trim()));
+const googleKeyInput = document.querySelector<HTMLInputElement>('#google-key')!;
+googleKeyInput.value = loadSetting('googleKey');
+googleKeyInput.addEventListener('change', () => storeSetting('googleKey', googleKeyInput.value.trim()));
+
+document.querySelector('#check-updates')!.addEventListener('click', () => {
+  settingsDialog.close();
+  actions.checkForUpdates();
+});
+document.querySelector('#make-start')!.addEventListener('click', () => {
+  settingsDialog.close();
+  actions.makeStartLocation();
+});
+document.querySelector('#clear-start')!.addEventListener('click', () => {
+  startView.clearStart();
+  hint.textContent = 'OpenOrbit will open where you left off.';
+});
+
+const clearButton = document.querySelector<HTMLButtonElement>('#clear-cache')!;
+clearButton.addEventListener('click', async () => {
+  const removed = await clearTileCache();
+  clearButton.textContent = `Cleared ${removed} cached tiles`;
+});
+
+// Restore the View menu's show/hide choices from last time.
+for (const cls of ['no-toolbar', 'no-sidebar', 'no-status', 'no-nav']) {
+  if (loadSetting(`view.${cls}`) === 'hidden') app.classList.add(cls);
+}
+if (loadSetting('view.scaleLegend') === 'hidden') scaleLegend.setShown(false);
+if (loadSetting('view.grid') === 'shown') grid.setShown(true);
+if (loadSetting('view.overviewMap') === 'shown') overviewMap.setShown(true);
+
+updateStatus();
+syncViewState();

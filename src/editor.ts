@@ -113,7 +113,7 @@ export class PlaceEditor {
 
     const folder = document.createElement('select');
     folder.innerHTML = '<option value="">My Places</option>';
-    for (const d of this.places.allFolders()) folder.add(new Option(`📁 ${d.name}`, d.id, false, d.id === f.folder));
+    for (const d of this.places.allFolders()) folder.add(new Option(d.name, d.id, false, d.id === f.folder));
     folder.addEventListener('change', () => (f.folder = folder.value || undefined));
 
     const description = document.createElement('textarea');
